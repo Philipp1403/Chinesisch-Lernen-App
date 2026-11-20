@@ -87,7 +87,7 @@ const KEY='hanyu.v2';
 let storageOk=true;
 const defaults=()=>({v:2,
   settings:{level:1,rate:0.85,slowRate:0.5,voice:'',auto:true,showText:true,tones:false,pinyin:true,outline:true,perRound:8,theme:'auto',modes:{read:true,listen:true,write:true}},
-  cards:{},stats:{},log:{},ui:{scope:[]}});
+  cards:{},stats:{},hard:{},hardOut:{},epoch:0,log:{},ui:{scope:[]}});
 let state=defaults();
 function load(){
   try{
@@ -95,7 +95,7 @@ function load(){
     if(s){ const o=JSON.parse(s); const d=defaults(); state=Object.assign(d,o); state.settings=Object.assign(d.settings,o.settings||{}); state.settings.modes=Object.assign(d.settings.modes,(o.settings||{}).modes||{}); state.ui=Object.assign(d.ui,o.ui||{}); }
   }catch(e){ storageOk=false; }
 }
-function save(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){ storageOk=false; } }
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){ storageOk=false; } if(typeof syQueue==='function') syQueue(); }
 function applyTones(){ document.documentElement.dataset.tones = state.settings.tones?'on':'off'; }
 function applyTheme(){
   applyTones();
@@ -123,7 +123,23 @@ function applyRating(id,q){
   const k=todayKey(); state.log[k]=(state.log[k]||0)+1;
 }
 function dueIds(){ const now=Date.now(); return Object.entries(state.cards).filter(([id,c])=>c.d<=now).sort((a,b)=>a[1].d-b[1].d).map(([id])=>+id); }
-function noteStat(wid,ok){ const s=state.stats[wid]||(state.stats[wid]={ok:0,bad:0}); if(ok) s.ok++; else s.bad++; }
+/* Schwierige Wörter: Ein Fehler nimmt das Wort auf, HARD_OUT richtige Antworten in Folge nehmen es wieder heraus.
+   kind: lesen, hören, schreiben, sprechen (null = Fehler nimmt das Wort nicht auf, richtige Antworten zählen aber) */
+const HARD_OUT=3;
+function noteStat(wid,ok,kind){
+  const s=state.stats[wid]||(state.stats[wid]={ok:0,bad:0}); if(ok) s.ok++; else s.bad++;
+  if(!state.hard) state.hard={};
+  let h=state.hard[wid];
+  if(!ok){
+    if(!kind) return;
+    if(!h) h=state.hard[wid]={s:0,n:0,k:{},t:0};
+    h.s=0; h.n++; h.k[kind]=(h.k[kind]||0)+1; h.t=Date.now();
+  }else if(h){
+    h.s++; h.t=Date.now();
+    if(h.s>=HARD_OUT){ delete state.hard[wid]; (state.hardOut||(state.hardOut={}))[wid]=Date.now(); }
+  }
+}
+function hardIds(){ return Object.keys(state.hard||{}).map(Number).filter(id=>BYID.has(id)).sort((a,b)=>{ const x=state.hard[a],y=state.hard[b]; return (x.s-y.s)||(y.n-x.n)||(y.t-x.t); }); }
 function weightOf(wid){ const s=state.stats[wid]; if(!s) return 2; const n=s.ok+s.bad; return 1+3*(s.bad+0.5)/(n+1)+(n<2?0.5:0); }
 function pickWeighted(items,n,wf){
   const pool=items.map(x=>({x,w:wf(x)})); const out=[];
