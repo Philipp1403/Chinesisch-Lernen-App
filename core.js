@@ -86,7 +86,7 @@ async function ensureChars(word){
 const KEY='hanyu.v2';
 let storageOk=true;
 const defaults=()=>({v:2,
-  settings:{level:1,rate:0.85,slowRate:0.5,voice:'',auto:true,pinyin:true,outline:true,perRound:8,theme:'auto',modes:{read:true,listen:true,write:true}},
+  settings:{level:1,rate:0.85,slowRate:0.5,voice:'',auto:true,showText:true,pinyin:true,outline:true,perRound:8,theme:'auto',modes:{read:true,listen:true,write:true}},
   cards:{},stats:{},log:{},ui:{scope:[]}});
 let state=defaults();
 function load(){
@@ -148,18 +148,37 @@ function pickVoice(){
   if(state.settings.voice){ const v=zhVoices.find(v=>v.voiceURI===state.settings.voice); if(v) return v; }
   return zhVoices.find(v=>/zh[-_]CN|cmn[-_]Hans/i.test(v.lang)) || zhVoices[0] || null;
 }
+/* Sprechen: normal in einem Stück. Langsam: Silbe für Silbe (bzw. Wort für Wort) mit Pausen,
+   danach das Ganze noch einmal im niedrigen Tempo. Nur über das Tempo allein bleibt iOS oft
+   beinahe gleich schnell, die Pausen machen den Unterschied hörbar. */
+function speakParts(text,parts){
+  if(parts&&parts.length) return parts.filter(Boolean);
+  const chars=[...text].filter(isHan);
+  return chars.length>1?chars:[];
+}
 function speak(text,opts={}){
   const slow=!!opts.slow; const my=++speakTick;
   return new Promise(res=>{
     if(!('speechSynthesis' in window)) return res(false);
     try{
       speechSynthesis.cancel();
-      const u=new SpeechSynthesisUtterance(text); u.lang='zh-CN'; const v=pickVoice(); if(v){ u.voice=v; u.lang=v.lang; }
-      u.rate = slow ? state.settings.slowRate : state.settings.rate;
-      const done=()=>res(my===speakTick);
-      u.onend=done; u.onerror=done;
-      speechSynthesis.speak(u);
-      setTimeout(done, 2500+text.length*900);
+      const v=pickVoice();
+      const rate = slow ? Math.min(state.settings.slowRate,0.6) : state.settings.rate;
+      const one=(t,r)=>new Promise(r2=>{
+        const u=new SpeechSynthesisUtterance(t); u.lang='zh-CN'; if(v){ u.voice=v; u.lang=v.lang; }
+        u.rate=r; let fin=false; const d=()=>{ if(!fin){ fin=true; r2(); } };
+        u.onend=d; u.onerror=d; speechSynthesis.speak(u);
+        setTimeout(d,2500+t.length*1400);
+      });
+      (async()=>{
+        if(!slow){ await one(text,rate); return res(my===speakTick); }
+        const parts=speakParts(text,opts.parts);
+        for(const p of parts){ if(my!==speakTick) return res(false); await one(p,rate); await sleep(380); }
+        if(my!==speakTick) return res(false);
+        if(parts.length) await sleep(250);
+        await one(text,rate);
+        res(my===speakTick);
+      })();
     }catch(e){ res(false); }
   });
 }

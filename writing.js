@@ -13,11 +13,12 @@ function writerOpts(size,extra={}){
   },extra);
 }
 /* Strichfolge-Kacheln: Tippen zeigt die Reihenfolge */
-async function mountTiles(host,word,{autoplay=true}={}){
+async function mountTiles(host,word,{autoplay=true,size=108}={}){
   await ensureChars(word);
   const chars=[...word.h].filter(isHan);
   host.innerHTML=chars.map((c,i)=>`<button class="tile" data-i="${i}" aria-label="Strichfolge von ${esc(c)} abspielen"></button>`).join('');
-  const writers=$$('.tile',host).map((el,i)=>HanziWriter.create(el,chars[i],writerOpts(108,{padding:8,showCharacter:false,showOutline:true})));
+  if(size!==108) $$('.tile',host).forEach(el=>{ el.style.width=el.style.height=(size+4)+'px'; });
+  const writers=$$('.tile',host).map((el,i)=>HanziWriter.create(el,chars[i],writerOpts(size,{padding:8,showCharacter:false,showOutline:true})));
   let token=0;
   async function playAll(){
     const my=++token;
@@ -28,7 +29,7 @@ async function mountTiles(host,word,{autoplay=true}={}){
   return {playAll};
 }
 /* Schreib-Quiz: ein Zeichen nach dem anderen, echte Strichprüfung */
-async function writeQuiz(outer,word,{onFinish}={}){
+async function writeQuiz(outer,word,{onFinish,outline}={}){
   await ensureChars(word);
   const chars=[...word.h].filter(isHan);
   let idx=0, mistakes=0, gaveUp=false, done=false, writer=null, alive=true;
@@ -41,7 +42,7 @@ async function writeQuiz(outer,word,{onFinish}={}){
     if(done||!alive) return;
     renderDots(); box.innerHTML='';
     const size=Math.max(200,box.clientWidth-4);
-    writer=HanziWriter.create(box,chars[idx],writerOpts(size,{showCharacter:false,showOutline:state.settings.outline}));
+    writer=HanziWriter.create(box,chars[idx],writerOpts(size,{showCharacter:false,showOutline:outline===undefined?state.settings.outline:outline}));
     say(chars.length>1?`Zeichen ${idx+1} von ${chars.length}: Striche in der richtigen Reihenfolge zeichnen`:'Zeichne die Striche in der richtigen Reihenfolge');
     writer.quiz({
       leniency:1.15,

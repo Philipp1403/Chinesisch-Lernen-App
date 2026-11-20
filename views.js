@@ -51,7 +51,7 @@ function viewLearn(m){
 function viewLesson(m){
   const l=LBYID.get(view.id); if(!l) return go('learn');
   const p=lessonProgress(l);
-  const ex=['choose','build','speak','draw','dictate','mixed'];
+  const ex=['choose','build','speak','draw','wdrill','dictate','mixed'];
   m.innerHTML=`<div class="stack fade">
     <div class="pagehead"><button class="btn small" data-back>${ICON.back.replace('<svg','<svg width="18" height="18"')}Zurück</button></div>
     <div class="lhead" style="${lessonStyle(l)}"><div class="ic ${l.icon.length>1?'ic2':''}">${l.icon}</div><div class="grow"><h1>${esc(l.title)}</h1><p class="muted" style="font-weight:700">${esc(l.sub)}</p><div class="bar thin" style="margin-top:10px;max-width:260px"><i style="width:${p.learned/p.total*100}%"></i></div><div class="muted small" style="font-weight:800;margin-top:4px">${p.learned} von ${p.total} Wörtern gelernt</div></div></div>
@@ -66,16 +66,16 @@ function viewLesson(m){
   m.onclick=e=>{
     if(e.target.closest('[data-back]')) return go('learn');
     if(e.target.closest('[data-learn]')) return startLearn(l.id);
-    const x=e.target.closest('[data-ex]'); if(x) return startPractice(x.dataset.ex,[l.id]);
+    const x=e.target.closest('[data-ex]'); if(x) return x.dataset.ex==='wdrill'?writeSetup([l.id]):startPractice(x.dataset.ex,[l.id]);
     const sy=e.target.closest('[data-say]'); if(sy) return void speak(BYID.get(+sy.dataset.say).h);
-    const ss=e.target.closest('[data-sayS]'); if(ss) return void speak(sentenceText(SBYID.get(+ss.dataset.sayS)));
+    const ss=e.target.closest('[data-sayS]'); if(ss) return void speak(sentenceText(SBYID.get(+ss.dataset.sayS)),{parts:sentParts(SBYID.get(+ss.dataset.sayS))});
     const wd=e.target.closest('[data-word]'); if(wd) return wordSheet(+wd.dataset.word);
   };
 }
 
 /* ============ Üben ============ */
 function viewPractice(m){
-  const types=['choose','build','speak','draw','dictate','mixed'];
+  const types=['choose','build','speak','draw','wdrill','dictate','mixed'];
   const scope=state.ui.scope||[];
   const label=scope.length?(scope.length===1?LBYID.get(scope[0]).title:`${scope.length} Lektionen`):'Alle Lektionen';
   m.innerHTML=`<div class="stack fade">
@@ -86,7 +86,7 @@ function viewPractice(m){
     ${ttsUsable()?'':`<div class="warnbox">Auf diesem Gerät ist keine chinesische Stimme installiert. Installiere eine unter Einstellungen, Bedienungshilfen, Gesprochene Inhalte, Stimmen.</div>`}
   </div>`;
   m.onclick=e=>{
-    const x=e.target.closest('[data-ex]'); if(x) return startPractice(x.dataset.ex,state.ui.scope);
+    const x=e.target.closest('[data-ex]'); if(x) return x.dataset.ex==='wdrill'?writeSetup(state.ui.scope):startPractice(x.dataset.ex,state.ui.scope);
     if(e.target.closest('[data-scope]')) scopeSheet();
   };
 }
@@ -102,6 +102,52 @@ function scopeSheet(){
       const c=e.target.closest('[data-l]'); if(c){ const id=c.dataset.l; sel.has(id)?sel.delete(id):sel.add(id); }
       if(e.target.closest('[data-ok]')){ state.ui.scope=[...sel]; save(); closeSheet(); renderView(); return; }
       if(e.target.closest('[data-all],[data-l]')){ const y=sh.scrollTop; sh.innerHTML=`<div class="grab"></div>`+html(); sh.scrollTop=y; }
+    };
+  });
+}
+
+/* ============ Schreibtraining einrichten ============ */
+function writeSetup(preScope){
+  const d={demo:true,reps:10,count:5,help:'fade'};
+  const c=Object.assign(d,state.ui.wset||{});
+  const sel=new Set(preScope&&preScope.length?preScope:(c.scope||[]));
+  const chip=(k,v,label,cur)=>`<button class="chip" data-${k}="${v}" aria-pressed="${String(cur)===String(v)}">${label}</button>`;
+  const html=()=>{
+    const words=drillWords([...sel]);
+    const prev=words.slice(0,14).map(w=>w.h).join(' ');
+    return `<h2 style="margin-bottom:6px">Zeichen schreiben üben</h2>
+    <p class="muted small" style="font-weight:700;margin-bottom:20px">Wähle ein Thema. Jedes Wort schreibst du mehrmals hintereinander.</p>
+    <div class="fieldlabel">Thema</div>
+    <div class="row" style="margin-bottom:6px"><button class="chip" data-all aria-pressed="${sel.size===0}">Alle Lektionen</button>${LESSONS.map(l=>`<button class="chip" data-l="${l.id}" aria-pressed="${sel.has(l.id)}">${esc(l.title)}</button>`).join('')}</div>
+    <div class="muted small" style="font-weight:700;margin:10px 0 22px">${words.length} Wörter zum Schreiben${prev?': <span class="hz" style="font-size:18px">'+esc(prev)+(words.length>14?' …':'')+'</span>':''}</div>
+    <div class="fieldlabel">So beginnst du</div>
+    <div class="choice2" style="margin-bottom:22px">
+      <button class="choice" data-demo="1" aria-pressed="${c.demo}"><b>Erst zeigen</b><span>Die Strichfolge läuft einmal vor, dann übst du</span></button>
+      <button class="choice" data-demo="0" aria-pressed="${!c.demo}"><b>Direkt üben</b><span>Du schreibst sofort selbst</span></button>
+    </div>
+    <div class="fieldlabel">Wiederholungen pro Wort</div>
+    <div class="row" style="margin-bottom:22px">${[3,5,10,15].map(n=>chip('reps',n,n+'×',c.reps)).join('')}</div>
+    <div class="fieldlabel">Wörter pro Runde</div>
+    <div class="row" style="margin-bottom:22px">${[3,5,10].map(n=>chip('count',n,n,c.count)).join('')}${chip('count',0,'Alle',c.count)}</div>
+    <div class="fieldlabel">Vorlage im Hintergrund</div>
+    <div class="row" style="margin-bottom:8px">${chip('help','fade','Nach und nach ausblenden',c.help)}${chip('help','on','Immer',c.help)}${chip('help','off','Nie',c.help)}</div>
+    <p class="muted small" style="font-weight:600;margin-bottom:22px">Beim Ausblenden hast du in den ersten Wiederholungen eine blasse Vorlage, danach schreibst du aus dem Gedächtnis.</p>
+    <div class="stickyfoot"><button class="btn primary block big" data-go ${words.length?'':'disabled'}>Los geht's</button></div>`;
+  };
+  openSheet(html(),sh=>{
+    sh.onclick=e=>{
+      let redraw=false;
+      if(e.target.closest('[data-all]')){ sel.clear(); redraw=true; }
+      const l=e.target.closest('[data-l]'); if(l){ const id=l.dataset.l; sel.has(id)?sel.delete(id):sel.add(id); redraw=true; }
+      const dm=e.target.closest('[data-demo]'); if(dm){ c.demo=dm.dataset.demo==='1'; redraw=true; }
+      const rp=e.target.closest('[data-reps]'); if(rp){ c.reps=+rp.dataset.reps; redraw=true; }
+      const ct=e.target.closest('[data-count]'); if(ct){ c.count=+ct.dataset.count; redraw=true; }
+      const hp=e.target.closest('[data-help]'); if(hp){ c.help=hp.dataset.help; redraw=true; }
+      if(e.target.closest('[data-go]')){
+        c.scope=[...sel]; state.ui.wset={scope:c.scope,demo:c.demo,reps:c.reps,count:c.count,help:c.help}; save();
+        closeSheet(); startWriteDrill({scope:c.scope,demo:c.demo,reps:c.reps,count:c.count,help:c.help}); return;
+      }
+      if(redraw){ const y=sh.scrollTop; sh.innerHTML=`<div class="grab"></div>`+html(); sh.scrollTop=y; }
     };
   });
 }
@@ -154,6 +200,30 @@ function viewWords(m){
     const r=e.target.closest('[data-w]'); if(r) wordSheet(+r.dataset.w);
   };
 }
+/* Kleine Worterklärung zum Antippen (in Sätzen und Wortanzeigen) */
+function closeTip(){ const t=$('#wtip'); if(t) t.remove(); }
+function wordTip(id,anchor){
+  const w=BYID.get(id); if(!w) return;
+  closeTip();
+  const py=wordPy(w), d=document.createElement('div'); d.id='wtip'; d.setAttribute('role','dialog');
+  d.innerHTML=`<div class="wt-in"><div class="wt-hz hz">${hanziHtml(w.h,py)}</div><div class="wt-mid"><div class="py">${pinyinHtml(py)}</div><div class="wt-de">${esc(gloss(w))}</div>${w.de&&w.m?`<div class="wt-en">${esc(w.m)}</div>`:''}</div><div class="wt-act"><button class="ibtn sm fill" data-tipau aria-label="Anhören">${ICON.speaker}</button><button class="ibtn sm" data-tipmore aria-label="Mehr zum Wort">${ICON.list}</button><button class="ibtn sm" data-tipx aria-label="Schließen">${ICON.x}</button></div></div>`;
+  document.body.appendChild(d);
+  if(anchor){
+    const r=anchor.getBoundingClientRect(), W=d.offsetWidth, H=d.offsetHeight, vw=innerWidth, vh=innerHeight;
+    let top=r.top-H-12; if(top<10) top=Math.min(r.bottom+12,vh-H-10);
+    let left=r.left+r.width/2-W/2; left=Math.max(10,Math.min(left,vw-W-10));
+    d.style.top=top+'px'; d.style.left=left+'px';
+  }
+  $('[data-tipau]',d).addEventListener('click',()=>speak(w.h));
+  $('[data-tipx]',d).addEventListener('click',closeTip);
+  $('[data-tipmore]',d).addEventListener('click',()=>{ closeTip(); wordSheet(id); });
+  speak(w.h);
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-tw]');
+  if(t){ e.preventDefault(); wordTip(+t.dataset.tw,t); return; }
+  if(!e.target.closest('#wtip')) closeTip();
+});
 function wordSheet(id){
   const w=BYID.get(id), py=wordPy(w), ex=EXAMPLE.get(id), s=ex?SBYID.get(ex):null;
   openSheet(`<div class="hz bighz" style="margin:6px 0 0">${hanziHtml(w.h,py)}</div>
@@ -186,6 +256,7 @@ function viewSettings(m){
       <div class="set"><div class="l"><b>Automatisch abspielen</b><span>Beim Öffnen einer Aufgabe</span></div><button class="sw" role="switch" aria-checked="${s.auto}" data-sw="auto" aria-label="Automatisch abspielen"></button></div>
     </div>
     <div class="card"><h3 style="margin-bottom:6px">Anzeige</h3>
+      <div class="set"><div class="l"><b>Text beim Hören anzeigen</b><span>Zeichen und Pinyin sichtbar, wenn die App etwas vorspricht</span></div><button class="sw" role="switch" aria-checked="${s.showText}" data-sw="showText" aria-label="Text beim Hören anzeigen"></button></div>
       <div class="set"><div class="l"><b>Pinyin auf Kacheln</b><span>Bei Satz bauen und Hören und schreiben</span></div><button class="sw" role="switch" aria-checked="${s.pinyin}" data-sw="pinyin" aria-label="Pinyin auf Kacheln"></button></div>
       <div class="set"><div class="l"><b>Strichhilfe beim Schreiben</b><span>Blasse Vorlage des Zeichens</span></div><button class="sw" role="switch" aria-checked="${s.outline}" data-sw="outline" aria-label="Strichhilfe"></button></div>
       <div class="set"><div class="l"><b>Aufgaben pro Runde</b></div><select id="per">${[5,8,10,12,15].map(n=>`<option ${s.perRound===n?'selected':''}>${n}</option>`).join('')}</select></div>
@@ -242,7 +313,7 @@ function viewSettings(m){
   });
   m.onclick=async e=>{
     const sw=e.target.closest('[data-sw]'); if(sw){ const k=sw.dataset.sw; s[k]=!s[k]; save(); sw.setAttribute('aria-checked',String(s[k])); return; }
-    const t=e.target.closest('[data-t]'); if(t){ speak('你好，很高兴认识你。',{slow:t.dataset.t==='s'}); return; }
+    const t=e.target.closest('[data-t]'); if(t){ speak('你好，很高兴认识你。',{slow:t.dataset.t==='s',parts:['你好','很','高兴','认识','你']}); return; }
     if(e.target.closest('[data-mictest]')){
       const out=$('#micres',m);
       if(!speechSupported()){ out.textContent='Dieser Browser bietet keine Spracherkennung (SpeechRecognition fehlt).'; return; }
