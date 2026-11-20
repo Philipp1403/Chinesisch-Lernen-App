@@ -371,3 +371,47 @@ textarea.search{font-family:ui-monospace,monospace}
 #wtip .wt-in{flex-wrap:wrap;row-gap:12px}
 #wtip .wt-act{flex-direction:row;flex-basis:100%;justify-content:flex-end;gap:10px}
 #wtip .wt-en{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* ===== Diagnose ===== */
+.diag>div{padding:7px 0;border-bottom:1px solid var(--line);line-height:1.4;word-break:break-word}
+.diag>div.bad{color:var(--bad-d)}
+
+/* ===== Töne: standardmäßig keine Farben ===== */
+html[data-tones=off] .t0,html[data-tones=off] .t1,html[data-tones=off] .t2,html[data-tones=off] .t3,html[data-tones=off] .t4{color:inherit}
+.sfoot .t0,.sfoot .t1,.sfoot .t2,.sfoot .t3,.sfoot .t4{color:inherit!important}
+.sfoot .fb .ruby .r-py{color:var(--muted)}
+.sfoot.ok .fb .ruby .r-py,.sfoot.no .fb .ruby .r-py{color:inherit;opacity:.8}
+
+/* ===== Antwortfläche: eine Fläche, kein Zeilenraster ===== */
+.answer{min-height:124px;background-image:none;padding:14px;align-content:flex-start}
+.answer:empty::before{content:'Tippe die Kacheln in der richtigen Reihenfolge an';color:var(--muted);font-weight:700;font-size:15px;width:100%;text-align:center;align-self:center;padding:30px 0}
+@media (min-width:700px){.answer{min-height:150px;background-image:none}}
+
+/* ===== Übersetzen (deutsche Kacheln) und Lektionstest ===== */
+.tok.de{min-width:64px;min-height:64px;padding:8px 22px}
+.tok.de .th{font-family:inherit;font-size:22px;font-weight:800}
+@media (min-width:700px){.tok.de{min-height:76px}.tok.de .th{font-size:26px}}
+.testcard{display:flex;align-items:center;gap:16px;width:100%;text-align:left;padding:18px 20px;border-radius:22px;border:2px solid var(--p);border-bottom-width:5px;background:var(--p-soft)}
+.testcard .ei{display:grid;place-items:center;width:52px;height:52px;border-radius:15px;background:var(--card);color:var(--p);flex:none}
+.testcard .ei svg{width:28px;height:28px}
+.testcard b{display:block;font-size:18px}.testcard span:not(.btn){font-size:13.5px;color:var(--muted);font-weight:600}
+.testcard:active{transform:translateY(2px);border-bottom-width:3px}
+.wronglist{margin-top:22px;text-align:left}
+
+/* ===== Töne, Lücke, Paare, lange Antworten ===== */
+.ruby.blank .r-hz{min-width:70px;text-align:center;border-bottom:4px solid var(--line2);color:var(--muted)}
+.opts.long{grid-template-columns:1fr}
+.opts.long .opt{min-height:68px;font-size:18px}
+.tonegrid .opt.tone{flex-direction:row;gap:16px;justify-content:flex-start;padding:12px 22px;text-align:left}
+.tonegrid .opt.tone .py{font-size:15.5px;font-weight:800;color:inherit}
+.tonegrid .opt.tone svg{flex:none}
+.pairs{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px}
+.pcol{display:flex;flex-direction:column;gap:12px}
+.pbtn{min-height:76px;padding:12px 14px;border-radius:18px;border:2px solid var(--line2);border-bottom-width:5px;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-weight:800;font-size:18px}
+.pbtn .hz{font-size:32px;line-height:1.1}
+.pbtn .py{font-size:14px;font-weight:700;color:var(--muted)}
+.pbtn.sel{border-color:var(--p);background:var(--p-soft)}
+.pbtn.right{background:var(--good-soft);border-color:var(--good);color:var(--good-d);opacity:.55}
+.pbtn.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--bad-d);animation:shake .35s}
+.pbtn:active:not([disabled]){transform:translateY(2px);border-bottom-width:3px}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
