@@ -1,6 +1,6 @@
 "use strict";
 /* ============ Darstellung von Sätzen ============ */
-function rubyUnit(py,h,cls=''){ return `<span class="ruby ${cls}"><span class="r-py">${pinyinHtml(py)}</span><span class="r-hz">${hanziHtml(h,py)}</span></span>`; }
+function rubyUnit(py,h,cls='',w=null){ return `<span class="ruby ${cls}" ${w!=null&&BYID.has(w)?`data-tw="${w}" role="button" tabindex="0"`:''}><span class="r-py">${pinyinHtml(py)}</span><span class="r-hz">${hanziHtml(h,py)}</span></span>`; }
 function rubyHtml(s,{marks=null,sm=false}={}){
   let out='', ci=0;
   for(const tok of s.t){
@@ -10,14 +10,18 @@ function rubyHtml(s,{marks=null,sm=false}={}){
       chars.forEach((c,i)=>{
         const v=marks[ci++]; const cls = v>=0.9?'cs-g':v>=0.5?'cs-o':'cs-r';
         const py=syl?syl[i]:tok.p;
-        out+=`<span class="ruby ${cls}"><span class="r-py">${esc(py)}</span><span class="r-hz">${esc(c)}</span></span>`;
+        out+=`<span class="ruby ${cls}" ${tok.w!=null&&BYID.has(tok.w)?`data-tw="${tok.w}"`:''}><span class="r-py">${esc(py)}</span><span class="r-hz">${esc(c)}</span></span>`;
       });
-    } else out+=rubyUnit(tok.p,tok.h);
+    } else out+=rubyUnit(tok.p,tok.h,'',tok.w);
   }
   return `<div class="sentence ${sm?'sm':''}">${out}</div>`;
 }
 const audioRow=(slowToo=true,extra='')=>`<div class="row" style="justify-content:center;gap:12px">${'<button class="ibtn fill" data-au="n" aria-label="Aussprache abspielen">'+ICON.speaker+'</button>'}${slowToo?'<button class="slowbtn" data-au="s" aria-label="Langsam abspielen">'+ICON.slow+'Langsam</button>':''}${extra}</div>`;
-function bindAudio(root,text){ $$('[data-au]',root).forEach(b=>b.addEventListener('click',()=>speak(text,{slow:b.dataset.au==='s'}))); }
+function bindAudio(root,text,parts=null){ $$('[data-au]',root).forEach(b=>b.addEventListener('click',()=>speak(text,{slow:b.dataset.au==='s',parts}))); }
+const sentParts=s=>s.t.filter(t=>!t.punc).map(t=>t.h);
+/* Text zum Hören: Zeichen und Pinyin, abschaltbar in den Einstellungen */
+const listenWord=(w,{hanzi=true}={})=>state.settings.showText?`<div class="listentext">${hanzi?`<div class="hz">${hanziHtml(w.h,wordPy(w))}</div>`:''}<div class="py">${pinyinHtml(wordPy(w))}</div></div>`:'';
+const listenSent=s=>state.settings.showText?`<div class="listentext">${rubyHtml(s,{sm:true})}</div>`:'';
 const autoSpeak=(t,slow=false)=>{ if(state.settings.auto) setTimeout(()=>speak(t,{slow}),200); };
 
 /* ============ Sitzungs-Motor ============ */
@@ -110,6 +114,7 @@ const TYPE_INFO={
   speak:{name:'Nachsprechen',desc:'Satz sprechen, Bewertung erhalten',icon:'mic'},
   draw:{name:'Zeichen zeichnen',desc:'Zeichen mit der richtigen Strichfolge',icon:'draw'},
   dictate:{name:'Hören und schreiben',desc:'Satz hören, aus Kacheln schreiben',icon:'dictate'},
+  wdrill:{name:'Schreibtraining',desc:'Zeichen mehrfach hintereinander üben',icon:'draw'},
   mixed:{name:'Gemischte Runde',desc:'Von allem etwas',icon:'mixed'},
 };
 
@@ -125,7 +130,7 @@ EX.intro=(host,it,ctx)=>{
     <div id="tiles" class="tiles"></div>
     ${s?`<div class="card" style="margin-top:20px;padding:14px 10px 6px"><div class="small muted center" style="font-weight:800;margin-bottom:8px">BEISPIEL</div>${rubyHtml(s,{sm:true})}<div class="center" style="font-weight:700;margin:0 0 10px">${esc(s.de)}</div><div class="row" style="justify-content:center;margin-bottom:8px"><button class="slowbtn" data-ex="n">${ICON.speaker}Anhören</button><button class="slowbtn" data-ex="s">${ICON.slow}Langsam</button></div></div>`:''}`;
   bindAudio(host,w.h);
-  $$('[data-ex]',host).forEach(b=>b.addEventListener('click',()=>speak(sentenceText(s),{slow:b.dataset.ex==='s'})));
+  $$('[data-ex]',host).forEach(b=>b.addEventListener('click',()=>speak(sentenceText(s),{slow:b.dataset.ex==='s',parts:sentParts(s)})));
   mountTiles($('#tiles',host),w).catch(()=>{ $('#tiles',host).innerHTML='<p class="muted small">Strichdaten konnten nicht geladen werden.</p>'; });
   autoSpeak(w.h);
   ctx.footer([
@@ -138,7 +143,7 @@ EX.intro=(host,it,ctx)=>{
 EX.choose=(host,it,ctx)=>{
   const w=BYID.get(it.wid), py=wordPy(w), v=it.variant;
   let head='';
-  if(v==='listen') head=`${MODE_TAG('Hören')}<div class="prompt">Was bedeutet das?</div><div class="row" style="justify-content:center;gap:14px;margin:6px 0 24px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>`;
+  if(v==='listen') head=`${MODE_TAG('Hören')}<div class="prompt">Was bedeutet das?</div><div class="row" style="justify-content:center;gap:14px;margin:6px 0 14px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>${listenWord(w)}`;
   else if(v==='read') head=`${MODE_TAG('Lesen')}<div class="prompt">Was bedeutet das?</div><div class="hz bighz" style="margin:0 0 4px">${hanziHtml(w.h,py)}</div><div class="center" style="margin-bottom:20px"><span class="py">${pinyinHtml(py)}</span></div>`;
   else head=`${MODE_TAG('Zuordnen')}<div class="prompt">Welches Wort passt?</div><div class="meaning" style="font-size:clamp(26px,7vw,36px);margin:0 0 24px">${esc(gloss(w))}</div>`;
   const optHtml=id=>{ const o=BYID.get(id); return v==='rev'
@@ -166,10 +171,10 @@ function tileBuilder(host,it,ctx,mode){
   const tok=(t,cls='',attr='')=>`<button class="tok ${cls}" ${attr}><span class="tp">${pinyinHtml(t.p)}</span><span class="th">${esc(t.h)}</span></button>`;
   let head;
   if(mode==='build') head=`${MODE_TAG('Satz bauen')}<div class="prompt">Übersetze ins Chinesische</div><div class="meaning" style="font-size:clamp(22px,5.6vw,30px);margin:0 0 22px">${esc(s.de)}</div>`;
-  else head=`${MODE_TAG('Hören und schreiben')}<div class="prompt">Schreibe, was du hörst</div><div class="row" style="justify-content:center;gap:12px;margin:0 0 22px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>`;
+  else head=`${MODE_TAG('Hören und schreiben')}<div class="prompt">Schreibe, was du hörst</div><div class="row" style="justify-content:center;gap:12px;margin:0 0 14px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>${listenSent(s)}`;
   host.innerHTML=head+`<div class="answer" id="ans"></div><div class="bank" id="bank"></div>`;
   host.classList.toggle('pinyin-off',!state.settings.pinyin);
-  bindAudio(host,sentenceText(s));
+  bindAudio(host,sentenceText(s),sentParts(s));
   if(mode==='dictate') autoSpeak(sentenceText(s));
   const ansEl=$('#ans',host), bankEl=$('#bank',host);
   let locked=false;
@@ -209,7 +214,7 @@ EX.speak=(host,it,ctx)=>{
     <div class="center" style="font-weight:700;margin:0 0 16px;color:var(--muted)" id="de">${esc(s.de)}</div>
     ${audioRow()}
     <div id="micarea"></div><div id="result"></div>`;
-  bindAudio(host,text);
+  bindAudio(host,text,sentParts(s));
   const area=$('#micarea',host), resEl=$('#result',host);
   let busy=false, finished=false;
   const skipBtn={label:'Ohne Bewertung weiter',cls:'quiet',onClick:()=>ctx.complete(null)};
@@ -267,7 +272,7 @@ EX.speak=(host,it,ctx)=>{
 EX.draw=(host,it,ctx)=>{
   const w=BYID.get(it.wid), py=wordPy(w), audioOnly=it.variant==='audio';
   host.innerHTML=`${MODE_TAG(audioOnly?'Hören und zeichnen':'Zeichen zeichnen')}
-    ${audioOnly?`<div class="prompt">Höre zu und zeichne das Wort</div>`:`<div class="center" style="margin-top:4px"><span class="py">${pinyinHtml(py)}</span></div>`}
+    ${audioOnly?`<div class="prompt">Höre zu und zeichne das Wort</div>`:''}<div class="center" style="margin-top:4px"><span class="py">${pinyinHtml(py)}</span></div>
     <div class="meaning" style="margin:8px 0 12px">${esc(gloss(w))}</div>
     ${audioRow()}<div id="q" style="margin-top:14px"></div>`;
   bindAudio(host,w.h);
@@ -280,11 +285,53 @@ EX.draw=(host,it,ctx)=>{
   return ()=>{ dead=true; if(quiz) quiz.destroy(); };
 };
 
+/* --- Schreibtraining: ein Wort mehrfach hintereinander schreiben --- */
+EX.wdrill=(host,it,ctx)=>{
+  const w=BYID.get(it.wid), py=wordPy(w), N=it.reps;
+  let r=0, phase='', quiz=null, dead=false, mist=0, replay=null;
+  host.innerHTML=`${MODE_TAG('Schreibtraining')}
+    <div class="center"><span class="py">${pinyinHtml(py)}</span></div>
+    <div class="meaning" style="margin:6px 0 16px">${esc(gloss(w))}</div>
+    ${audioRow()}
+    <div class="dprog" id="dprog"></div>
+    <div id="q" style="margin-top:6px"></div>`;
+  bindAudio(host,w.h);
+  const q=$('#q',host), prog=$('#dprog',host);
+  const setBar=()=>{ const b=$('.sbar .bar>i'); if(b) b.style.width=Math.round((SESS.i+(phase==='demo'?0:r/N))/SESS.total*100)+'%'; };
+  const dots=(cur)=>{ prog.innerHTML=`<div class="dtxt">${cur}</div><div class="ddots">${Array.from({length:N},(_,i)=>`<i class="${i<r?'done':i===r&&phase==='practice'?'on':''}"></i>`).join('')}</div>`; };
+  function killQuiz(){ if(quiz){ try{ quiz.destroy(); }catch(_){} quiz=null; } }
+  function showDemo(){
+    phase='demo'; killQuiz(); setBar();
+    prog.innerHTML=`<div class="dtxt">Erst anschauen, dann üben</div>`;
+    q.innerHTML=`<div id="dt" class="tiles big"></div><p class="muted small center" style="margin-top:14px;font-weight:700">Tippe auf ein Zeichen, um die Strichfolge nochmal zu sehen</p>`;
+    mountTiles($('#dt',q),w,{size:Math.max(110,Math.min(230,Math.floor((Math.min(innerWidth,820)-56-([...w.h].length-1)*16)/[...w.h].length)-4))}).then(m=>{ replay=m; }).catch(()=>{ $('#dt',q).innerHTML='<p class="muted small">Strichdaten konnten nicht geladen werden.</p>'; });
+    ctx.footer([{label:'Nochmal zeigen',onClick:()=>{ if(replay) replay.playAll(); }},{label:'Jetzt üben',cls:'primary grow',onClick:startRep}]);
+  }
+  function startRep(){
+    phase='practice'; killQuiz(); setBar();
+    const outline = it.help==='on' ? true : it.help==='off' ? false : r<Math.ceil(N*0.4);
+    dots(`Wiederholung ${r+1} von ${N}${it.help==='fade'?(outline?' · mit Vorlage':' · ohne Vorlage'):''}`);
+    q.innerHTML=''; const sub=document.createElement('div'); q.appendChild(sub);
+    ctx.footer([{label:'Wort überspringen',cls:'quiet grow',onClick:()=>ctx.complete(null)}]);
+    writeQuiz(sub,w,{outline,onFinish:({mistakes})=>{
+      mist+=mistakes; r++; setBar(); dots(r>=N?'Geschafft':`Wiederholung ${r} von ${N} erledigt`);
+      ctx.footer([r>=N?{label:'Fertig',cls:'primary grow big',onClick:done}:{label:`Wiederholung ${r+1} von ${N}`,cls:'primary grow big',onClick:startRep}]);
+    }}).then(z=>{ if(dead) z.destroy(); else quiz=z; }).catch(()=>{ q.innerHTML='<p class="muted small center">Strichdaten konnten nicht geladen werden.</p>'; ctx.footer([{label:'Weiter',cls:'primary grow',onClick:()=>ctx.complete(null)}]); });
+  }
+  function done(){
+    killQuiz(); ctx.record(null);
+    ctx.footerRaw(`<div class="fb"><b>${N} Wiederholungen geschafft</b><div><span class="hz">${hanziHtml(w.h,py)}</span> &nbsp;${mist===0?'ohne Fehlstrich':mist+' Fehlstrich'+(mist===1?'':'e')}</div></div><button class="btn good" data-fb="0">Weiter</button>`,e=>{ if(e.target.closest('[data-fb]')) ctx.next(); },'ok');
+  }
+  autoSpeak(w.h);
+  if(it.demo) showDemo(); else startRep();
+  return ()=>{ dead=true; killQuiz(); };
+};
+
 /* --- Wiederholung (Karteikarte) --- */
 EX.review=(host,it,ctx)=>{
   const w=BYID.get(it.wid), py=wordPy(w), mode=it.mode, c=state.cards[w.id]||newCard();
   const front = mode==='read' ? `${MODE_TAG('Lesen')}<div class="subprompt">Was heißt das, und wie spricht man es aus?</div><div class="hz bighz" id="fronthz" style="margin:20px 0 10px">${esc(w.h)}</div>`
-    : mode==='listen' ? `${MODE_TAG('Hören')}<div class="subprompt">Was bedeutet das Wort?</div><div class="row" style="justify-content:center;gap:14px;margin:26px 0"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>`
+    : mode==='listen' ? `${MODE_TAG('Hören')}<div class="subprompt">Was bedeutet das Wort?</div><div class="row" style="justify-content:center;gap:14px;margin:26px 0 14px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>${listenWord(w)}`
     : `${MODE_TAG('Schreiben')}<div class="center" style="margin-top:6px"><span class="py">${pinyinHtml(py)}</span></div><div class="meaning" style="margin:8px 0 10px">${esc(gloss(w))}</div>${audioRow()}<div id="q" style="margin-top:12px"></div>`;
   host.innerHTML=front+`<div id="back"></div>`;
   bindAudio(host,w.h);
@@ -295,7 +342,7 @@ EX.review=(host,it,ctx)=>{
       e=>{ const b=e.target.closest('[data-rate]'); if(b) rate(+b.dataset.rate); });
   };
   function reveal(sug){
-    const fh=$('#fronthz',host); if(fh) fh.remove();
+    const fh=$('#fronthz',host); if(fh) fh.remove(); const lt=$('.listentext',host); if(lt) lt.remove();
     $('#back',host).innerHTML=`<div class="hz bighz" style="margin:${mode==='write'?'0':'6px'} 0 2px;${mode==='write'?'display:none':''}">${hanziHtml(w.h,py)}</div>
       ${mode==='write'?'':`<div class="center"><span class="py">${pinyinHtml(py)}</span></div><div class="meaning" style="margin:8px 0 6px">${esc(gloss(w))}</div><div class="row" style="justify-content:center;margin-top:10px"><button class="ibtn sm" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="ibtn sm" data-au="s" aria-label="Langsam">${ICON.slow}</button></div>`}`;
     bindAudio($('#back',host),w.h);
@@ -364,6 +411,18 @@ function startPractice(type,scope){
   const n=state.settings.perRound;
   const items=makeItems(type,scope,n); if(!items.length) return;
   runSession({title:TYPE_INFO[type].name,items,kind:'practice',regen:()=>makeItems(type,scope,n),onExit:()=>renderView()});
+}
+/* Schreibtraining: Themen wählen, Wörter der Reihe nach, jedes mehrfach hintereinander */
+function drillWords(scope){
+  const info=scopeInfo(scope);
+  return info.lessons.flatMap(l=>l.words).filter((id,i,a)=>a.indexOf(id)===i).map(id=>BYID.get(id)).filter(w=>{ const c=[...w.h].filter(isHan).length; return w&&c>=1&&c<=3&&c===[...w.h].length; });
+}
+function startWriteDrill(cfg){
+  const words=drillWords(cfg.scope); if(!words.length) return;
+  const per=cfg.count>0?Math.min(cfg.count,words.length):words.length;
+  let off=0;
+  const gen=()=>{ const out=[]; for(let i=0;i<per;i++){ const w=words[(off+i)%words.length]; out.push({type:'wdrill',wid:w.id,reps:cfg.reps,demo:cfg.demo,help:cfg.help}); } off=(off+per)%words.length; return out; };
+  runSession({title:'Schreibtraining',items:gen(),kind:'practice',regen:per<words.length?gen:null,onExit:()=>renderView()});
 }
 function startLearn(lessonId){
   const l=LBYID.get(lessonId);
