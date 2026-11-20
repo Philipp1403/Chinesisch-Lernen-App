@@ -58,6 +58,14 @@ function showItem(){
   try{ SESS.cleanup=EX[it.type](host,it,ctx)||null; }
   catch(err){ host.innerHTML=`<div class="card"><p>Diese Aufgabe konnte nicht geladen werden.</p><p class="muted small">${esc(err.message||err)}</p></div>`; ctx.footer([{label:'Weiter',cls:'primary grow',onClick:()=>ctx.next()}]); }
 }
+/* In welcher Fähigkeit liegt der Fehler? Bestimmt die Anzeige bei den schwierigen Wörtern */
+function hardKind(it){
+  if(it.type==='review') return it.mode==='write'?'schreiben':it.mode==='listen'?'hören':'lesen';
+  if(it.type==='choose') return it.variant==='listen'?'hören':'lesen';
+  if(it.type==='draw'||it.type==='wdrill') return 'schreiben';
+  if(it.type==='dictate'||it.type==='listensent'||it.type==='tones') return 'hören';
+  return 'lesen';
+}
 function makeCtx(it){
   let handlers=[];
   const ctx={
@@ -84,8 +92,8 @@ function makeCtx(it){
       if(!it.retry){ SESS.cntFirst++; if(ok) SESS.okFirst++; }
       if(!ok && !it.retry && it.wid) SESS.wrong.add(it.wid);
       if(!ok && !it.retry && !SESS.noRetry){ SESS.items.push({...it,retry:true,_rec:false}); }
-      if(it.wid) noteStat(it.wid,ok);
-      if(it.sid){ const s=SBYID.get(it.sid); for(const t of s.t) if(!t.punc) noteStat(t.w,ok); }
+      if(it.wid) noteStat(it.wid,ok,hardKind(it));
+      if(it.sid){ const s=SBYID.get(it.sid); for(const t of s.t) if(!t.punc) noteStat(t.w,ok,null); }
     },
   };
   return ctx;
@@ -125,6 +133,7 @@ const TYPE_INFO={
   speak:{name:'Nachsprechen',desc:'Satz sprechen, Bewertung erhalten',icon:'mic'},
   draw:{name:'Zeichen zeichnen',desc:'Zeichen mit der richtigen Strichfolge',icon:'draw'},
   dictate:{name:'Hören und schreiben',desc:'Satz hören, aus Kacheln schreiben',icon:'dictate'},
+  wcard:{name:'Karteikarten frei',desc:'Sprechen und zeichnen',icon:'mic'},
   wdrill:{name:'Schreibtraining',desc:'Zeichen mehrfach hintereinander üben',icon:'draw'},
   mixed:{name:'Gemischte Runde',desc:'Von allem etwas',icon:'mixed'},
 };
@@ -278,7 +287,7 @@ EX.speak=(host,it,ctx)=>{
       finished=true;
       // Wortweise Statistik
       const bad=new Set(); res.chars.forEach(c=>{ if(c.s<0.9) bad.add(c.ti); });
-      s.t.forEach((t,ti)=>{ if(!t.punc) noteStat(t.w,!bad.has(ti)); });
+      s.t.forEach((t,ti)=>{ if(!t.punc) noteStat(t.w,!bad.has(ti),'sprechen'); });
       it._rec=true; if(!it.retry){ SESS.cntFirst++; if(ok) SESS.okFirst++; }
       SESS.i++; showItem();
     }}]);
@@ -307,6 +316,88 @@ EX.draw=(host,it,ctx)=>{
     ctx.finish({ok,title:gaveUp?'Das nächste Mal klappt es':mistakes===0?'Fehlerfrei!':ok?'Gut gezeichnet':'Übe es noch einmal',html:`<span class="hz">${hanziHtml(w.h,py)}</span> &nbsp;${esc(py)} &nbsp;=&nbsp; ${esc(gloss(w))}`});
   }}).then(q=>{ if(dead) q.destroy(); else quiz=q; }).catch(()=>{ $('#q',host).innerHTML='<p class="muted small center">Strichdaten konnten nicht geladen werden.</p>'; ctx.footer([{label:'Weiter',cls:'primary grow',onClick:()=>ctx.complete(null)}]); });
   return ()=>{ dead=true; if(quiz) quiz.destroy(); };
+};
+
+/* --- Karteikarte frei: erst sprechen, dann zeichnen (Schritt 1 und 2 für ein Wort) --- */
+EX.wcard=(host,it,ctx)=>{
+  const w=BYID.get(it.wid), py=wordPy(w);
+  const nHan=[...w.h].filter(isHan).length;
+  const canSay=nHan>0, canDraw=nHan>=1&&nHan<=4&&nHan===[...w.h].length;
+  const s={t:[{h:w.h,p:w.p,w:w.id}]};
+  const useAz=azActive(), supported=useAz||speechSupported();
+  let busy=false, dead=false, quiz=null, speakOk=null, drawOk=null, myUrl=null, player=null;
+  host.innerHTML=`${MODE_TAG('Sprechen und zeichnen')}
+    <div class="subprompt" id="wc-step"></div>
+    <div class="meaning" style="margin:12px 0 6px;font-size:28px">${esc(gloss(w))}</div>
+    <div id="wc-show" class="center" style="min-height:40px"></div>
+    <div id="wc-body"></div>`;
+  const step=$('#wc-step',host), show=$('#wc-show',host), body=$('#wc-body',host);
+  /* Das Zeichen bleibt verborgen, bis es gezeichnet ist; nur das Pinyin hilft */
+  const reveal=()=>{ show.innerHTML=`<div class="center" style="margin:6px 0"><span class="py" style="font-size:24px">${pinyinHtml(py)}</span></div>`; };
+  const killQuiz=()=>{ if(quiz){ try{ quiz.destroy(); }catch(_){} quiz=null; } };
+  function finishCard(){
+    killQuiz();
+    const fails=[]; if(speakOk===false) fails.push('sprechen'); if(drawOk===false) fails.push('schreiben');
+    const counted=speakOk!==null||drawOk!==null;
+    if(counted){ if(fails.length) fails.forEach(k=>noteStat(w.id,false,k)); else noteStat(w.id,true); }
+    if(it._rec) return; it._rec=true;
+    if(counted){ SESS.cntFirst++; if(!fails.length) SESS.okFirst++; else SESS.wrong.add(w.id); }
+    const ok=!fails.length;
+    const parts=[]; if(speakOk!==null) parts.push('Sprechen '+(speakOk?'gut':'üben')); if(drawOk!==null) parts.push('Zeichnen '+(drawOk?'gut':'üben'));
+    ctx.footerRaw(`<div class="fb"><b>${counted?(ok?'Beides geschafft!':'Noch nicht ganz'):'Übersprungen'}</b><div><span class="hz">${hanziHtml(w.h,py)}</span> &nbsp;${esc(py)}${parts.length?' &nbsp;·&nbsp; '+parts.join(', '):''}</div></div><button class="btn ${ok?'good':'bad'}" data-fb="0">Weiter</button>`,
+      e=>{ if(e.target.closest('[data-fb]')) ctx.next(); }, counted?(ok?'ok':'no'):'');
+  }
+  function drawPhase(){
+    step.textContent=canSay?'Schritt 2 von 2: Zeichne das Wort':'Zeichne das Wort';
+    reveal(); body.innerHTML=`<div id="wq" style="margin-top:12px"></div>`;
+    ctx.footer([{label:'Überspringen',cls:'quiet grow',onClick:()=>{ drawOk=null; finishCard(); }}]);
+    const sub=$('#wq',body);
+    writeQuiz(sub,w,{outline:false,onFinish:({mistakes,gaveUp,chars})=>{ drawOk=!gaveUp&&mistakes<=chars*2; finishCard(); }})
+      .then(q=>{ if(dead) q.destroy(); else quiz=q; })
+      .catch(()=>{ sub.innerHTML='<p class="muted small center">Strichdaten konnten nicht geladen werden.</p>'; ctx.footer([{label:'Weiter',cls:'primary grow',onClick:finishCard}]); });
+  }
+  function afterSay(){ if(canDraw) drawPhase(); else finishCard(); }
+  function sayPhase(note){
+    step.textContent=canDraw?'Schritt 1 von 2: Sag das Wort auf Chinesisch':'Sag das Wort auf Chinesisch';
+    show.innerHTML=`<button class="slowbtn" data-hint>${ICON.speaker}Hinweis: Wort hören</button>`;
+    if(!supported){
+      body.innerHTML=`<div class="micwrap"><div class="infobox center">Spracherkennung ist hier nicht verfügbar. Sprich das Wort laut und bewerte dich selbst.</div></div>`;
+      ctx.footer([{label:'Nicht gewusst',cls:'',onClick:()=>{ speakOk=false; reveal(); speak(w.h); afterSayBtn(); }},{label:'Gewusst',cls:'good grow',onClick:()=>{ speakOk=true; afterSay(); }}]);
+      return;
+    }
+    body.innerHTML=`<div class="micwrap"><button class="mic" id="mic" aria-label="Aufnahme starten">${ICON.mic}</button><div class="micnote" id="mnote">${note||'Tippe auf das Mikrofon und sag das Wort'}</div></div>`;
+    $('#mic',body).addEventListener('click',listen);
+    ctx.footer([{label:canDraw?'Sprechen überspringen':'Überspringen',cls:'quiet grow',onClick:()=>{ speakOk=null; afterSay(); }}]);
+  }
+  function afterSayBtn(){ ctx.footer([{label:canDraw?'Weiter zum Zeichnen':'Weiter',cls:'primary grow big',onClick:afterSay}]); }
+  async function listen(){
+    if(busy){ if(useAz) azCancel(); else stopListening(); return; }
+    busy=true; stopSpeak();
+    const mic=$('#mic',body), note=$('#mnote',body); mic.classList.add('live');
+    note.textContent='Ich höre zu … sprich das Wort, tippe nochmal zum Beenden';
+    let res=null, audio=null, err=null;
+    if(useAz){
+      const r=await azAssess(s,[...w.h].filter(isHan).join('')); if(r.error) err=azErrorText(r.error,r.detail); else{ res=r.res; audio=r.audio; }
+    }else{
+      const r=await recognizeOnce(); if(r.error) err=speechErrorText(r.error); else res=scoreSpeech(s,r.alts);
+    }
+    busy=false; if(dead) return;
+    if(err!==null&&!res){ sayPhase(err||undefined); return; }
+    if(myUrl){ try{ URL.revokeObjectURL(myUrl); }catch(_){} myUrl=null; }
+    if(audio){ try{ myUrl=URL.createObjectURL(audio); }catch(_){ myUrl=null; } }
+    const sc=res.score; speakOk=sc>=70; reveal();
+    const col=sc>=80?'var(--good)':sc>=50?'var(--warn)':'var(--bad)';
+    body.innerHTML=`<div class="scorebox"><div class="ring" style="--v:${sc};--c:${col}"><b>${sc}</b></div><div><div style="font-size:20px;font-weight:900">${sc>=90?'Sehr gut!':sc>=70?'Gut':sc>=50?'Fast':'Nochmal versuchen'}</div></div></div>
+      <div class="row" style="justify-content:center;margin:14px 0 4px"><button class="slowbtn" data-model>${ICON.speaker}Vorbild</button>${myUrl?`<button class="slowbtn" data-play>${ICON.play}Meine Aufnahme</button>`:''}</div>`;
+    ctx.footer([{label:'Nochmal sprechen',cls:'',onClick:()=>{ speakOk=null; show.innerHTML=''; sayPhase(); }},{label:canDraw?'Weiter zum Zeichnen':'Weiter',cls:'primary grow big',onClick:afterSay}]);
+  }
+  host.addEventListener('click',e=>{
+    if(e.target.closest('[data-hint]')){ speak(w.h); return; }
+    if(e.target.closest('[data-model]')){ if(player) player.pause(); speak(w.h); return; }
+    if(e.target.closest('[data-play]')&&myUrl){ stopSpeak(); if(player) player.pause(); player=new Audio(myUrl); player.play().catch(()=>{}); }
+  });
+  if(canSay) sayPhase(); else drawPhase();
+  return ()=>{ dead=true; killQuiz(); abortListening(); if(player){ try{ player.pause(); }catch(_){} } if(myUrl){ try{ URL.revokeObjectURL(myUrl); }catch(_){} } };
 };
 
 /* --- Töne-Training: Silbe hören, Ton bestimmen --- */
@@ -582,6 +673,32 @@ function startLearn(lessonId){
   const l=LBYID.get(lessonId);
   const gen=()=>learnItems(l,6);
   runSession({title:l.title,items:gen(),kind:'learn',regen:()=>{ const fresh=l.words.filter(id=>!state.cards[id]); return fresh.length?learnItems(l,6):null; },onExit:()=>renderView()});
+}
+/* Freie Karteikarten: Wörter der gewählten Themen, gemischt, erst sprechen dann zeichnen. Ändert den Wiederholungsplan nicht. */
+function startFlashcards(scope,count){
+  const info=scopeInfo(scope); const pool=info.words.filter(Boolean);
+  if(!pool.length) return;
+  const per=count>0?Math.min(count,pool.length):pool.length;
+  const gen=()=>pickWeighted(pool,per,w=>weightOf(w.id)).map(w=>({type:'wcard',wid:w.id}));
+  runSession({title:'Karteikarten frei',items:gen(),kind:'practice',noRetry:true,regen:pool.length>per?gen:null,onExit:()=>renderView()});
+}
+/* Schwierige Wörter üben: je Wort eine Aufgabe passend zur Schwäche (lesen, hören, schreiben oder sprechen und zeichnen) */
+function hardItems(n){
+  const ids=hardIds().slice(0,n); if(!ids.length) return [];
+  const info=scopeInfo(null);
+  return ids.map(id=>{
+    const w=BYID.get(id), h=state.hard[id];
+    const kinds=Object.entries(h.k||{}); let kind='lesen';
+    if(kinds.length){ let r=Math.random()*kinds.reduce((a,b)=>a+b[1],0); for(const [k,v] of kinds){ r-=v; if(r<=0){ kind=k; break; } } }
+    if(kind==='hören'&&!ttsUsable()) kind='lesen';
+    if(kind==='sprechen') return {type:'wcard',wid:id};
+    if(kind==='schreiben'&&[...w.h].every(isHan)&&[...w.h].length<=4) return {type:'review',wid:id,mode:'write'};
+    return chooseItem(w,info,kind==='hören'?'listen':(Math.random()<0.5?'read':'rev'));
+  });
+}
+function startHardPractice(){
+  const items=hardItems(12); if(!items.length) return;
+  runSession({title:'Schwierige Wörter',items,kind:'practice',regen:()=>{ const x=hardItems(12); return x.length?x:null; },onExit:()=>renderView()});
 }
 function startReview(){
   const ids=dueIds().slice(0,30); if(!ids.length) return;

@@ -155,6 +155,33 @@ function writeSetup(preScope){
 }
 
 /* ============ Wiederholen ============ */
+/* Schwierige Wörter und freie Karteikarten (unter Wiederholen) */
+const KIND_LABEL={lesen:'Lesen',hören:'Hören',schreiben:'Schreiben',sprechen:'Sprechen'};
+function hardCard(){
+  const ids=hardIds();
+  const rows=ids.slice(0,10).map(id=>{
+    const w=BYID.get(id), h=state.hard[id], py=wordPy(w);
+    const tags=Object.entries(h.k||{}).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<span class="kindtag">${KIND_LABEL[k]||k} ${n}×</span>`).join('');
+    const dots=Array.from({length:HARD_OUT},(_,i)=>`<i class="${i<h.s?'done':''}"></i>`).join('');
+    return `<div class="wrow" data-w="${w.id}" style="cursor:pointer"><div class="hz">${hanziHtml(w.h,py)}</div><div class="mid"><div class="py">${pinyinHtml(py)}</div><div class="de">${esc(gloss(w))}</div><div class="kindrow">${tags}</div></div><div class="hdots" title="${h.s} von ${HARD_OUT} richtig in Folge">${dots}</div></div>`;
+  }).join('');
+  return `<div class="card" id="hardcard"><div class="row" style="justify-content:space-between;align-items:baseline"><h3 style="margin:0">Schwierige Wörter</h3><b style="font-size:22px;color:var(--p)">${ids.length}</b></div>
+    <p class="muted small" style="font-weight:700;margin:6px 0 12px">Jeder Fehler nimmt ein Wort hier auf. Nach ${HARD_OUT} richtigen Antworten in Folge verschwindet es wieder.</p>
+    ${ids.length?`<div class="wlist" style="margin-bottom:12px">${rows}</div>${ids.length>10?`<div class="muted small center" style="font-weight:700;margin-bottom:12px">und ${ids.length-10} weitere</div>`:''}<button class="btn primary big block" data-hard>Schwierige Wörter üben</button>`
+    :`<div class="infobox">Noch keine. Wörter, die du falsch beantwortest, erscheinen hier automatisch.</div>`}</div>`;
+}
+function flashCard(){
+  const scope=state.ui.scope||[], n=state.ui.fcCount===undefined?10:state.ui.fcCount;
+  const label=scope.length?(scope.length===1?LBYID.get(scope[0]).title:`${scope.length} Lektionen`):'Alle Lektionen';
+  const total=scopeInfo(scope).words.length;
+  return `<div class="card" id="flashcard"><h3 style="margin-bottom:4px">Karteikarten frei</h3>
+    <p class="muted small" style="font-weight:700;margin:0 0 12px">Du siehst die deutsche Bedeutung, sagst das Wort und zeichnest es dann. Der Wiederholungsplan bleibt unverändert, Fehler landen bei den schwierigen Wörtern.</p>
+    <button class="btn block" data-fscope style="margin-bottom:12px;justify-content:space-between"><span>Thema: <b>${esc(label)}</b></span><span class="muted small">${total} Wörter</span></button>
+    <div class="fieldlabel">Karten pro Runde</div>
+    <div class="row" style="margin-bottom:14px">${[5,10,20,0].map(k=>`<button class="chip" data-fcn="${k}" aria-pressed="${n===k}">${k||'Alle'}</button>`).join('')}</div>
+    <button class="btn primary big block" data-fstart ${total?'':'disabled'}>Karteikarten starten</button></div>`;
+}
+
 function viewReview(m){
   const due=dueIds().length, total=Object.keys(state.cards).length, today=state.log[todayKey()]||0;
   const next=Object.values(state.cards).filter(c=>c.d>Date.now()).sort((a,b)=>a.d-b.d)[0];
@@ -168,6 +195,8 @@ function viewReview(m){
       ${due?`<button class="btn primary big block" data-start>Wiederholung starten</button>`:total?`<div class="infobox">${next?'Als Nächstes fällig: '+new Date(next.d).toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'}):'Alles erledigt.'}</div>
         <button class="btn block" style="margin-top:12px" data-early>Trotzdem die nächsten 10 wiederholen</button>`:`<button class="btn primary big block" data-go-learn>Zu den Lektionen</button>`}
     </div>
+    ${hardCard()}
+    ${flashCard()}
     <div class="card"><h3 style="margin-bottom:10px">Kartenarten</h3>
       ${[['read','Lesen','Zeichen sehen, Bedeutung und Aussprache wissen'],['listen','Hören','Wort hören, Bedeutung wissen'],['write','Schreiben','Zeichen mit richtiger Strichfolge zeichnen']].map(([k,t,d])=>`<div class="set"><div class="l"><b>${t}</b><span>${d}</span></div><button class="sw" role="switch" aria-checked="${state.settings.modes[k]}" data-mode="${k}" aria-label="${t}"></button></div>`).join('')}
     </div>
@@ -175,6 +204,11 @@ function viewReview(m){
   m.onclick=e=>{
     if(e.target.closest('[data-start]')) return startReview();
     if(e.target.closest('[data-go-learn]')) return go('learn');
+    if(e.target.closest('[data-hard]')) return startHardPractice();
+    if(e.target.closest('[data-fscope]')) return scopeSheet();
+    if(e.target.closest('[data-fstart]')) return startFlashcards(state.ui.scope,state.ui.fcCount===undefined?10:state.ui.fcCount);
+    const fc=e.target.closest('[data-fcn]'); if(fc){ state.ui.fcCount=+fc.dataset.fcn; save(); return renderView(); }
+    const hw=e.target.closest('#hardcard [data-w]'); if(hw) return wordSheet(+hw.dataset.w);
     if(e.target.closest('[data-early]')){ const ids=Object.entries(state.cards).sort((a,b)=>a[1].d-b[1].d).slice(0,10); ids.forEach(([id,c])=>{ c.d=Date.now(); }); save(); return startReview(); }
     const sw=e.target.closest('[data-mode]'); if(sw){ const k=sw.dataset.mode; state.settings.modes[k]=!state.settings.modes[k]; if(!Object.values(state.settings.modes).some(Boolean)) state.settings.modes[k]=true; save(); renderView(); }
   };
@@ -334,6 +368,26 @@ function viewSettings(m){
       <p class="muted small" style="font-weight:600;margin-bottom:12px">Prüft Schritt für Schritt Sprachausgabe, Mikrofon und Spracherkennung auf diesem Gerät und zeigt genau, wo etwas hakt. Sprich, wenn die App es sagt.</p>
       <div class="row"><button class="btn" data-diag>Sprache und Mikrofon prüfen</button></div><div id="diagres" class="small diag" style="margin-top:14px;font-weight:600"></div>
     </div>
+    <div class="card" id="sycard"><h3 style="margin-bottom:6px">Abgleich zwischen Geräten</h3>
+      <p class="muted small" style="font-weight:600;margin-bottom:12px">Dein Lernstand wird in einem privaten Gist deines GitHub-Kontos gespeichert und mit iPad, Handy und PC gemischt. Dabei wird nichts überschrieben. Einstellungen wie Stimme und Design bleiben pro Gerät.</p>
+      <div class="set"><div class="l"><b>Status</b><span id="systate">${syConfigured()?(SY.err?esc(SY.err):SY.last?'Zuletzt abgeglichen: '+new Date(SY.last).toLocaleString('de-DE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Verbunden, noch nicht abgeglichen'):'Nicht eingerichtet'}</span></div></div>
+      <div class="azform">
+        <label class="small" style="font-weight:800;display:block" for="sytoken">GitHub-Token</label>
+        <input id="sytoken" class="search" type="password" placeholder="${syConfigured()?'gespeichert, zum Ändern neu einfügen':'Token einfügen'}" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="row" style="margin-top:12px"><button class="btn primary" data-sysave>Verbinden</button><button class="btn" data-synow ${syConfigured()?'':'disabled'}>Jetzt abgleichen</button><button class="btn small quiet" data-sydel ${syConfigured()?'':'disabled'}>Trennen</button></div>
+        <div id="syres" class="small" style="margin-top:12px;font-weight:700"></div>
+      </div>
+      <details style="margin-top:14px"><summary style="font-weight:800;cursor:pointer">So richtest du den Abgleich ein</summary>
+        <ol class="small" style="font-weight:600;line-height:1.55;padding-left:20px;margin-top:8px;display:grid;gap:6px">
+          <li>Öffne github.com/settings/personal-access-tokens/new und melde dich an.</li>
+          <li>Gib dem Token einen Namen (z. B. Hanyu) und wähle die längste Gültigkeit.</li>
+          <li>Unter „Repository access“ musst du nichts Besonderes wählen. Das Token braucht keinen Zugriff auf deine Repositories.</li>
+          <li>Öffne „Permissions“, dann „Account permissions“, und stelle „Gists“ auf „Read and write“.</li>
+          <li>Tippe auf „Generate token“, kopiere das Token und füge es oben ein.</li>
+          <li>Wiederhole das Einfügen auf jedem Gerät mit demselben Token.</li>
+        </ol>
+      </details>
+    </div>
     <div class="card"><h3 style="margin-bottom:6px">Sicherung</h3>
       <p class="muted small" style="font-weight:600;margin-bottom:12px">Der Fortschritt liegt nur in diesem Browser. Mit der Sicherung kannst du ihn auf ein anderes Gerät mitnehmen.</p>
       <div class="row"><button class="btn" data-export>Sicherung kopieren</button><button class="btn" data-import>Aus Text wiederherstellen</button></div>
@@ -381,6 +435,22 @@ function viewSettings(m){
       out.innerHTML=`Funktioniert. Gesamt <b>${r.res.score}</b>, Genauigkeit ${a.accuracy}, Flüssigkeit ${a.fluency}, Vollständigkeit ${a.completeness}. Erkannt: <span class="hz" style="font-size:18px">${esc(r.res.heard)}</span><br>Wörter: ${a.words.map(w=>esc(w.w)+' '+w.acc+(w.type!=='None'?' ('+esc(w.type)+')':'')).join(' · ')}`;
       return;
     }
+    if(e.target.closest('[data-sysave]')){
+      const t=$('#sytoken',m).value.trim(), out=$('#syres',m);
+      if(!t){ out.textContent='Füge zuerst das Token ein.'; return; }
+      SY.token=t; SY.gist=''; SY.err=''; SY.code=0; out.textContent='Verbinde und gleiche ab …';
+      const ch=await syRun();
+      if(SY.err&&(SY.code===401||SY.code===403)){ const msg=SY.err; SY.token=''; await sySave(); renderView(); setTimeout(()=>{ const o=$('#syres'); if(o) o.textContent=msg; },0); return; }
+      await sySave(); renderView(); if(ch) return;
+      setTimeout(()=>{ const o=$('#syres'); if(o) o.textContent=SY.err||'Verbunden und abgeglichen.'; },0);
+      return;
+    }
+    if(e.target.closest('[data-synow]')){
+      const out=$('#syres',m); out.textContent='Gleiche ab …'; const ch=await syRun(); renderView();
+      setTimeout(()=>{ const o=$('#syres'); if(o) o.textContent=SY.err||(ch?'Abgeglichen, es kamen neue Daten von einem anderen Gerät.':'Abgeglichen, alles auf dem gleichen Stand.'); },0);
+      return;
+    }
+    if(e.target.closest('[data-sydel]')){ SY.token=''; delete SY.tokenEnc; SY.gist=''; SY.err=''; SY.last=0; await sySave(); renderView(); return; }
     if(e.target.closest('[data-export]')){
       const txt=JSON.stringify(state); const msg=$('#bkmsg',m);
       try{ await navigator.clipboard.writeText(txt); msg.textContent='Sicherung in die Zwischenablage kopiert. Füge sie z. B. in eine Notiz ein.'; }
@@ -395,9 +465,9 @@ function viewSettings(m){
       return;
     }
     if(e.target.closest('[data-reset]')){
-      openSheet(`<h2>Fortschritt zurücksetzen?</h2><p class="muted" style="font-weight:700;margin:8px 0 18px">Alle gelernten Wörter, Wiederholungen und Statistiken werden gelöscht. Das lässt sich nicht rückgängig machen. Erstelle vorher eine Sicherung.</p><button class="btn bad block" data-yes>Ja, alles löschen</button><button class="btn block quiet" style="margin-top:10px" data-no>Abbrechen</button>`,sh=>{
+      openSheet(`<h2>Fortschritt zurücksetzen?</h2><p class="muted" style="font-weight:700;margin:8px 0 18px">Alle gelernten Wörter, Wiederholungen und Statistiken werden gelöscht, auch auf Geräten, die per Abgleich verbunden sind. Das lässt sich nicht rückgängig machen. Erstelle vorher eine Sicherung.</p><button class="btn bad block" data-yes>Ja, alles löschen</button><button class="btn block quiet" style="margin-top:10px" data-no>Abbrechen</button>`,sh=>{
         $('[data-no]',sh).addEventListener('click',closeSheet);
-        $('[data-yes]',sh).addEventListener('click',()=>{ const keep=state.settings; state=defaults(); state.settings=keep; save(); closeSheet(); renderView(); });
+        $('[data-yes]',sh).addEventListener('click',()=>{ const keep=state.settings; state=defaults(); state.settings=keep; state.epoch=Date.now(); save(); closeSheet(); renderView(); });
       });
     }
   };
@@ -406,13 +476,14 @@ function viewSettings(m){
 /* ============ Start ============ */
 async function boot(){
   await lockGate();
-  load(); azLoad(); await azInit(); applyTheme();
+  load(); azLoad(); await azInit(); syLoad(); await syInit(); applyTheme();
   try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme); }catch(_){}
   $('#main').innerHTML='<p class="muted center" style="padding:60px 0;font-weight:700">Lade …</p>';
   try{ await loadData(); }
   catch(err){ $('#main').innerHTML=`<div class="card"><h2>Daten konnten nicht geladen werden</h2><p class="muted" style="margin-top:8px">${esc(err.message||err)}. Die App muss über einen Webserver (nicht per Doppelklick auf die Datei) geöffnet werden.</p></div>`; return; }
   window.__app={state:()=>state,go,startPractice,startLearn,startReview,get S(){return SESS;},scoreSpeech,SBYID,LESSONS,BYID,save,makeItems,renderView};
   renderView();
+  syStart();
   if('serviceWorker' in navigator && location.protocol.startsWith('http') && !/claude\.ai|claudeusercontent/.test(location.host)){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 }
 boot();
