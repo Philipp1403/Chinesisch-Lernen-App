@@ -1,9 +1,11 @@
 "use strict";
 /* ============ Darstellung von Sätzen ============ */
 function rubyUnit(py,h,cls='',w=null){ return `<span class="ruby ${cls}" ${w!=null&&BYID.has(w)?`data-tw="${w}" role="button" tabindex="0"`:''}><span class="r-py">${pinyinHtml(py)}</span><span class="r-hz">${hanziHtml(h,py)}</span></span>`; }
-function rubyHtml(s,{marks=null,sm=false}={}){
-  let out='', ci=0;
+function rubyHtml(s,{marks=null,sm=false,blank=-1}={}){
+  let out='', ci=0, ti=-1;
   for(const tok of s.t){
+    ti++;
+    if(ti===blank){ out+=`<span class="ruby blank"><span class="r-py"></span><span class="r-hz">＿＿</span></span>`; continue; }
     if(tok.punc){ out+=`<span class="ruby punc"><span class="r-py"></span><span class="r-hz">${esc(tok.h)}</span></span>`; continue; }
     if(marks){
       const chars=[...tok.h], syl=charSylls(tok.h,tok.p);
@@ -27,7 +29,7 @@ const autoSpeak=(t,slow=false)=>{ if(state.settings.auto) setTimeout(()=>speak(t
 /* ============ Sitzungs-Motor ============ */
 let SESS=null; const EX={};
 function runSession(opts){
-  SESS={title:opts.title||'',items:[...opts.items],total:opts.items.length,regen:opts.regen||null,onExit:opts.onExit||null,kind:opts.kind||'',t0:Date.now(),i:0,okFirst:0,cntFirst:0,learned:0,cleanup:null,handlers:[]};
+  SESS={title:opts.title||'',items:[...opts.items],total:opts.items.length,regen:opts.regen||null,onExit:opts.onExit||null,kind:opts.kind||'',t0:Date.now(),i:0,okFirst:0,cntFirst:0,learned:0,cleanup:null,handlers:[],noRetry:!!opts.noRetry,wrong:new Set(),lessonId:opts.lessonId||null};
   const root=$('#session'); root.classList.remove('hidden'); document.body.style.overflow='hidden';
   root.innerHTML=`<div class="sbar"><button class="xbtn" data-s="quit" aria-label="Beenden">${ICON.x}</button><div class="bar thin p grow" role="progressbar"><i style="width:0%"></i></div></div><div class="sbody"><div class="sinner" id="sx"></div></div><div class="sfoot hidden" id="sf"></div>`;
   root.onclick=e=>{ if(e.target.closest('[data-s=quit]')) exitSession(); };
@@ -80,7 +82,8 @@ function makeCtx(it){
       if(it._rec) return; it._rec=true;
       if(ok===null||ok===undefined) return;
       if(!it.retry){ SESS.cntFirst++; if(ok) SESS.okFirst++; }
-      if(!ok && !it.retry){ SESS.items.push({...it,retry:true,_rec:false}); }
+      if(!ok && !it.retry && it.wid) SESS.wrong.add(it.wid);
+      if(!ok && !it.retry && !SESS.noRetry){ SESS.items.push({...it,retry:true,_rec:false}); }
       if(it.wid) noteStat(it.wid,ok);
       if(it.sid){ const s=SBYID.get(it.sid); for(const t of s.t) if(!t.punc) noteStat(t.w,ok); }
     },
@@ -91,15 +94,18 @@ function showDone(){
   const el=Math.round((Date.now()-SESS.t0)/1000), mm=Math.floor(el/60), ss=String(el%60).padStart(2,'0');
   const acc=SESS.cntFirst? Math.round(100*SESS.okFirst/SESS.cntFirst):null;
   $('.sbar .bar>i').style.width='100%';
-  const head = SESS.kind==='learn' ? 'Wörter gelernt' : SESS.kind==='review' ? 'Wiederholung erledigt' : 'Runde geschafft';
+  const head = SESS.kind==='learn' ? 'Wörter gelernt' : SESS.kind==='review' ? 'Wiederholung erledigt' : SESS.kind==='test' ? 'Lektionstest fertig' : 'Runde geschafft';
+  if(SESS.kind==='test'&&SESS.lessonId){ const t=state.ui.tests=state.ui.tests||{}; const old=t[SESS.lessonId]; t[SESS.lessonId]={last:acc,best:Math.max(acc||0,old&&old.best||0),ts:Date.now()}; save(); }
+  const wrongList=[...SESS.wrong].map(id=>BYID.get(id)).filter(Boolean);
   $('#sx').innerHTML=`<div class="donebox fade"><div class="hz" style="font-size:72px;color:var(--p)">好</div><h1 style="margin-top:6px">${head}</h1>
     <div class="stats3">
       ${SESS.kind==='learn'
         ? `<div class="stat"><b>${SESS.learned}</b><span>neue Wörter</span></div><div class="stat"><b>${Object.keys(state.cards).length}</b><span>im Stapel</span></div>`
-        : `<div class="stat"><b>${acc===null?'–':acc+'%'}</b><span>beim 1. Versuch</span></div><div class="stat"><b>${SESS.total}</b><span>Aufgaben</span></div>`}
+        : `<div class="stat"><b>${acc===null?'–':acc+'%'}</b><span>${SESS.kind==='test'?'richtig':'beim 1. Versuch'}</span></div><div class="stat"><b>${SESS.total}</b><span>Aufgaben</span></div>`}
       <div class="stat"><b>${mm}:${ss}</b><span>Zeit</span></div>
     </div>
-    ${SESS.kind==='learn'?'<p class="muted" style="font-weight:700">Die Wörter sind jetzt in deiner Wiederholung. Übe sie gleich in einer Runde.</p>':''}</div>`;
+    ${SESS.kind==='learn'?'<p class="muted" style="font-weight:700">Die Wörter sind jetzt in deiner Wiederholung. Übe sie gleich in einer Runde.</p>':''}
+    ${SESS.kind==='test'?(wrongList.length?`<div class="card wronglist"><div class="fieldlabel">Das solltest du nochmal üben</div>${wrongList.map(w=>`<div class="wrow"><div class="hz" data-tw="${w.id}">${hanziHtml(w.h,wordPy(w))}</div><div class="mid"><div class="py">${pinyinHtml(wordPy(w))}</div><div class="de">${esc(gloss(w))}</div></div></div>`).join('')}</div>`:'<p class="muted" style="font-weight:700">Alles richtig beim ersten Versuch.</p>'):''}</div>`;
   const btns=[]; const nextItems=SESS.regen?SESS.regen():null;
   if(nextItems&&nextItems.length) btns.push({label:SESS.kind==='learn'?'Weitere Wörter':'Noch eine Runde',cls:'primary grow',onClick:()=>{ const o=SESS; runSession({title:o.title,items:nextItems,regen:o.regen,onExit:o.onExit,kind:o.kind}); }});
   btns.push({label:'Fertig',cls:(btns.length?'':'primary ')+'grow',onClick:exitSession});
@@ -111,6 +117,11 @@ const MODE_TAG=t=>`<div class="tag-mode">${t}</div>`;
 const TYPE_INFO={
   choose:{name:'Wörter auswählen',desc:'Hören, lesen, zuordnen',icon:'choose'},
   build:{name:'Satz bauen',desc:'Chinesischen Satz aus Kacheln bilden',icon:'build'},
+  trans:{name:'Übersetzen',desc:'Chinesischen Satz aus deutschen Wörtern bilden',icon:'build'},
+  tones:{name:'Töne-Training',desc:'Ton hören und bestimmen',icon:'dictate'},
+  cloze:{name:'Lückentext',desc:'Fehlendes Wort im Satz wählen',icon:'choose'},
+  pairs:{name:'Paare zuordnen',desc:'Chinesisch und Deutsch verbinden',icon:'mixed'},
+  listensent:{name:'Hören und verstehen',desc:'Satz hören, Bedeutung wählen',icon:'dictate'},
   speak:{name:'Nachsprechen',desc:'Satz sprechen, Bewertung erhalten',icon:'mic'},
   draw:{name:'Zeichen zeichnen',desc:'Zeichen mit der richtigen Strichfolge',icon:'draw'},
   dictate:{name:'Hören und schreiben',desc:'Satz hören, aus Kacheln schreiben',icon:'dictate'},
@@ -165,17 +176,21 @@ EX.choose=(host,it,ctx)=>{
 
 /* --- Kacheln (Satz bauen / Hören und schreiben) --- */
 function tileBuilder(host,it,ctx,mode){
-  const s=SBYID.get(it.sid); const target=s.t.filter(t=>!t.punc);
-  const bank=shuffle([...target.map((t,i)=>({h:t.h,p:t.p,w:t.w})),...it.dis.map(t=>({h:t.h,p:t.p,w:t.w}))]).map((t,i)=>({...t,k:i}));
+  const s=SBYID.get(it.sid); const trans=mode==='trans';
+  const target=trans?germanTokens(s.de).map(h=>({h,p:'',w:null})):s.t.filter(t=>!t.punc);
+  const bank=shuffle([...target.map((t,i)=>({h:t.h,p:t.p,w:t.w})),...it.dis.map(t=>({h:t.h,p:t.p||'',w:t.w}))]).map((t,i)=>({...t,k:i}));
   const ans=[];
-  const tok=(t,cls='',attr='')=>`<button class="tok ${cls}" ${attr}><span class="tp">${pinyinHtml(t.p)}</span><span class="th">${esc(t.h)}</span></button>`;
+  const tok=(t,cls='',attr='')=>trans
+    ? `<button class="tok de ${cls}" ${attr}><span class="th">${esc(t.h)}</span></button>`
+    : `<button class="tok ${cls}" ${attr}><span class="tp">${pinyinHtml(t.p)}</span><span class="th">${esc(t.h)}</span></button>`;
   let head;
-  if(mode==='build') head=`${MODE_TAG('Satz bauen')}<div class="prompt">Übersetze ins Chinesische</div><div class="meaning" style="font-size:clamp(22px,5.6vw,30px);margin:0 0 22px">${esc(s.de)}</div>`;
+  if(trans) head=`${MODE_TAG('Übersetzen')}<div class="prompt">Was heißt das auf Deutsch?</div>${rubyHtml(s)}<div class="row" style="justify-content:center;gap:12px;margin:6px 0 24px"><button class="ibtn sm fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>`;
+  else if(mode==='build') head=`${MODE_TAG('Satz bauen')}<div class="prompt">Übersetze ins Chinesische</div><div class="meaning" style="font-size:clamp(22px,5.6vw,30px);margin:0 0 22px">${esc(s.de)}</div>`;
   else head=`${MODE_TAG('Hören und schreiben')}<div class="prompt">Schreibe, was du hörst</div><div class="row" style="justify-content:center;gap:12px;margin:0 0 14px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>${listenSent(s)}`;
   host.innerHTML=head+`<div class="answer" id="ans"></div><div class="bank" id="bank"></div>`;
   host.classList.toggle('pinyin-off',!state.settings.pinyin);
   bindAudio(host,sentenceText(s),sentParts(s));
-  if(mode==='dictate') autoSpeak(sentenceText(s));
+  if(mode==='dictate'||trans) autoSpeak(sentenceText(s));
   const ansEl=$('#ans',host), bankEl=$('#bank',host);
   let locked=false;
   function draw(){
@@ -186,15 +201,16 @@ function tileBuilder(host,it,ctx,mode){
   host.addEventListener('click',e=>{
     if(locked) return;
     const b=e.target.closest('[data-b]'), a=e.target.closest('[data-a]');
-    if(b){ const k=+b.dataset.b; ans.push(k); speak(bank[k].h); draw(); }
+    if(b){ const k=+b.dataset.b; ans.push(k); if(!trans) speak(bank[k].h); draw(); }
     else if(a){ ans.splice(+a.dataset.a,1); draw(); }
   });
-  const solution=()=>`${rubyHtml(s,{sm:true})}<div style="font-weight:700">${esc(s.de)}</div>`;
+  const solution=()=>trans?`<div style="font-weight:800;font-size:17px">${esc(s.de)}</div>`:`${rubyHtml(s,{sm:true})}<div style="font-weight:700">${esc(s.de)}</div>`;
   function check(){
     locked=true;
     const got=ans.map(k=>bank[k].h), want=target.map(t=>t.h);
-    const ok=got.length===want.length && got.every((h,i)=>h===want[i]);
-    $$('#ans .tok',host).forEach((el,i)=>el.classList.add(got[i]===want[i]?'good':'bad'));
+    const same=(a,b)=>trans?a.toLowerCase()===b.toLowerCase():a===b;
+    const ok=got.length===want.length && got.every((h,i)=>same(h,want[i]));
+    $$('#ans .tok',host).forEach((el,i)=>el.classList.add(want[i]!==undefined&&same(got[i],want[i])?'good':'bad'));
     if(ok){ speak(sentenceText(s)); ctx.finish({ok:true,title:'Richtig!',html:solution()}); }
     else ctx.finish({ok:false,title:'Die richtige Lösung:',html:solution()});
   }
@@ -204,6 +220,7 @@ function tileBuilder(host,it,ctx,mode){
 }
 EX.build=(host,it,ctx)=>tileBuilder(host,it,ctx,'build');
 EX.dictate=(host,it,ctx)=>tileBuilder(host,it,ctx,'dictate');
+EX.trans=(host,it,ctx)=>tileBuilder(host,it,ctx,'trans');
 
 /* --- Nachsprechen --- */
 EX.speak=(host,it,ctx)=>{
@@ -216,7 +233,7 @@ EX.speak=(host,it,ctx)=>{
     <div id="micarea"></div><div id="result"></div>`;
   bindAudio(host,text,sentParts(s));
   const area=$('#micarea',host), resEl=$('#result',host);
-  let busy=false, finished=false;
+  let busy=false, finished=false, myUrl=null, player=null;
   const skipBtn={label:'Ohne Bewertung weiter',cls:'quiet',onClick:()=>ctx.complete(null)};
   function idle(note){
     resEl.innerHTML='';
@@ -239,19 +256,22 @@ EX.speak=(host,it,ctx)=>{
       const refText=[...text].filter(isHan).join('');
       const r=await azAssess(s,refText); busy=false; if(finished) return;
       if(r.error){ idle(azErrorText(r.error,r.detail)||undefined); return; }
-      evaluate(null,r.res); return;
+      evaluate(null,r.res,r.audio); return;
     }
     note.textContent='Ich höre zu … tippe nochmal, wenn du fertig bist';
     const r=await recognizeOnce(); busy=false; if(finished) return;
     if(r.error){ idle(speechErrorText(r.error)||undefined); return; }
     evaluate(r.alts);
   }
-  function evaluate(alts,pre){
+  function evaluate(alts,pre,audioBlob){
     const res=pre||scoreSpeech(s,alts); const sc=res.score;
+    if(myUrl){ try{ URL.revokeObjectURL(myUrl); }catch(_){} myUrl=null; }
+    if(audioBlob){ try{ myUrl=URL.createObjectURL(audioBlob); }catch(_){ myUrl=null; } }
     const ok=sc>=70, col=sc>=80?'var(--good)':sc>=50?'var(--warn)':'var(--bad)';
     area.innerHTML='';
     $('#sent',host).innerHTML=rubyHtml(s,{marks:res.got});
     resEl.innerHTML=`<div class="scorebox"><div class="ring" style="--v:${sc};--c:${col}"><b>${sc}</b></div><div><div style="font-size:20px;font-weight:900">${sc>=90?'Sehr gut!':sc>=70?'Gut':sc>=50?'Fast':'Versuche es nochmal'}</div><div class="heard">Verstanden: <span class="hz">${esc(res.heard||'–')}</span></div></div></div>
+      ${myUrl?`<div class="row" style="justify-content:center;margin:16px 0 4px"><button class="slowbtn" data-play>${ICON.play}Meine Aufnahme anhören</button><button class="slowbtn" data-model>${ICON.speaker}Vorbild</button></div>`:''}
       ${res.az?`<div class="azsub"><span>Genauigkeit <b>${res.az.accuracy}</b></span><span>Flüssigkeit <b>${res.az.fluency}</b></span><span>Vollständigkeit <b>${res.az.completeness}</b></span></div>`:''}
       <div class="legend"><span><i style="background:var(--good)"></i>richtig</span><span><i style="background:var(--warn)"></i>${res.az?'wackelig':'Ton oder ähnlich'}</span><span><i style="background:var(--bad)"></i>${res.az?'falsch oder fehlt':'nicht erkannt'}</span></div>`;
     ctx.footer([{label:'Nochmal sprechen',cls:'',onClick:()=>{ $('#sent',host).innerHTML=rubyHtml(s); idle(); }},{label:'Weiter',cls:(ok?'good':'primary')+' grow',onClick:()=>{
@@ -263,9 +283,13 @@ EX.speak=(host,it,ctx)=>{
       SESS.i++; showItem();
     }}]);
   }
+  resEl.addEventListener('click',e=>{
+    if(e.target.closest('[data-model]')){ if(player){ player.pause(); } speak(text,{parts:sentParts(s)}); return; }
+    if(e.target.closest('[data-play]')&&myUrl){ stopSpeak(); if(player){ player.pause(); } player=new Audio(myUrl); player.play().catch(()=>{ const n=$('.scorebox',resEl); if(n) n.insertAdjacentHTML('afterend','<p class="muted small center" style="font-weight:700">Die Aufnahme lässt sich auf diesem Gerät nicht abspielen.</p>'); }); }
+  });
   autoSpeak(text);
   idle();
-  return ()=>{ finished=true; abortListening(); };
+  return ()=>{ finished=true; abortListening(); if(player){ try{ player.pause(); }catch(_){} } if(myUrl){ try{ URL.revokeObjectURL(myUrl); }catch(_){} } };
 };
 
 /* --- Zeichen zeichnen --- */
@@ -283,6 +307,88 @@ EX.draw=(host,it,ctx)=>{
     ctx.finish({ok,title:gaveUp?'Das nächste Mal klappt es':mistakes===0?'Fehlerfrei!':ok?'Gut gezeichnet':'Übe es noch einmal',html:`<span class="hz">${hanziHtml(w.h,py)}</span> &nbsp;${esc(py)} &nbsp;=&nbsp; ${esc(gloss(w))}`});
   }}).then(q=>{ if(dead) q.destroy(); else quiz=q; }).catch(()=>{ $('#q',host).innerHTML='<p class="muted small center">Strichdaten konnten nicht geladen werden.</p>'; ctx.footer([{label:'Weiter',cls:'primary grow',onClick:()=>ctx.complete(null)}]); });
   return ()=>{ dead=true; if(quiz) quiz.destroy(); };
+};
+
+/* --- Töne-Training: Silbe hören, Ton bestimmen --- */
+const TONE_SVG={
+  1:'<path d="M6 10H34"/>', 2:'<path d="M6 30L34 10"/>', 3:'<path d="M6 12L16 30L34 8"/>', 4:'<path d="M6 8L34 32"/>'};
+const TONE_NAME={1:'1. Ton: hoch, gleichbleibend',2:'2. Ton: steigend',3:'3. Ton: fällt, dann steigt',4:'4. Ton: fallend'};
+EX.tones=(host,it,ctx)=>{
+  const w=BYID.get(it.wid), py=wordPy(w), tone=toneOf(py), base=baseSyl(py);
+  host.innerHTML=`${MODE_TAG('Töne')}<div class="prompt">Welchen Ton hörst du?</div>
+    <div class="row" style="justify-content:center;gap:14px;margin:6px 0 14px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>
+    ${state.settings.showText?`<div class="listentext"><div class="hz">${esc(w.h)}</div><div class="py">${esc(base)}</div></div>`:`<div class="listentext"><div class="py" style="font-size:26px">${esc(base)}</div></div>`}
+    <div class="opts tonegrid">${[1,2,3,4].map(t=>`<button class="opt tone" data-t="${t}"><svg viewBox="0 0 40 40" width="44" height="44" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${TONE_SVG[t]}</svg><span class="py">${TONE_NAME[t]}</span></button>`).join('')}</div>`;
+  bindAudio(host,w.h);
+  autoSpeak(w.h);
+  let locked=false;
+  $$('.opt',host).forEach(b=>b.addEventListener('click',()=>{
+    if(locked) return; locked=true;
+    const ok=+b.dataset.t===tone;
+    $$('.opt',host).forEach(x=>{ x.disabled=true; if(+x.dataset.t===tone) x.classList.add('right'); });
+    if(!ok) b.classList.add('wrong');
+    speak(w.h);
+    ctx.finish({ok,title:ok?'Richtig!':`Das war der ${tone}. Ton`,html:`<span class="hz">${hanziHtml(w.h,py)}</span> &nbsp;${esc(py)} &nbsp;=&nbsp; ${esc(gloss(w))}`});
+  }));
+};
+
+/* --- Lückentext: fehlendes Wort wählen --- */
+EX.cloze=(host,it,ctx)=>{
+  const s=SBYID.get(it.sid), tok=s.t[it.idx];
+  host.innerHTML=`${MODE_TAG('Lückentext')}<div class="prompt">Welches Wort fehlt?</div>
+    <div id="csent">${rubyHtml(s,{blank:it.idx})}</div>
+    <div class="center" style="font-weight:700;margin:0 0 24px;color:var(--muted)">${esc(s.de)}</div>
+    <div class="opts">${it.opts.map((o,i)=>`<button class="opt" data-i="${i}"><span class="hz">${esc(o.h)}</span><span class="py">${pinyinHtml(o.p)}</span></button>`).join('')}</div>`;
+  let locked=false;
+  $$('.opt',host).forEach(b=>b.addEventListener('click',()=>{
+    if(locked) return; locked=true;
+    const o=it.opts[+b.dataset.i], ok=o.h===tok.h;
+    $$('.opt',host).forEach(x=>{ x.disabled=true; if(it.opts[+x.dataset.i].h===tok.h) x.classList.add('right'); });
+    if(!ok) b.classList.add('wrong');
+    $('#csent',host).innerHTML=rubyHtml(s);
+    speak(sentenceText(s));
+    ctx.finish({ok,title:ok?'Richtig!':'Das richtige Wort:',html:`<span class="hz">${esc(tok.h)}</span> &nbsp;${esc(tok.p)}`});
+  }));
+};
+
+/* --- Paare zuordnen --- */
+EX.pairs=(host,it,ctx)=>{
+  const ws=it.wids.map(id=>BYID.get(id));
+  const left=shuffle(ws), right=shuffle(ws);
+  host.innerHTML=`${MODE_TAG('Paare')}<div class="prompt">Finde die Paare</div>
+    <div class="pairs"><div class="pcol" id="pl">${left.map(w=>`<button class="pbtn" data-l="${w.id}"><span class="hz">${esc(w.h)}</span><span class="py">${pinyinHtml(wordPy(w))}</span></button>`).join('')}</div>
+    <div class="pcol" id="pr">${right.map(w=>`<button class="pbtn de" data-r="${w.id}">${esc(gloss(w))}</button>`).join('')}</div></div>`;
+  let selL=null, mist=0, left_n=ws.length, busy=false;
+  const done=()=>{ ctx.record(null); ctx.footerRaw(`<div class="fb"><b>${mist===0?'Alle Paare ohne Fehler':'Alle Paare gefunden'}</b><div>${mist} Fehlversuch${mist===1?'':'e'}</div></div><button class="btn good" data-fb="0">Weiter</button>`,e=>{ if(e.target.closest('[data-fb]')) ctx.next(); },'ok'); };
+  host.addEventListener('click',async e=>{
+    if(busy) return;
+    const l=e.target.closest('[data-l]'), r=e.target.closest('[data-r]');
+    if(l&&!l.disabled){ $$('[data-l]',host).forEach(x=>x.classList.remove('sel')); l.classList.add('sel'); selL=l; speak(BYID.get(+l.dataset.l).h); return; }
+    if(r&&!r.disabled&&selL){
+      busy=true;
+      if(selL.dataset.l===r.dataset.r){ [selL,r].forEach(x=>{ x.classList.remove('sel'); x.classList.add('right'); x.disabled=true; }); left_n--; selL=null; busy=false; if(!left_n) done(); }
+      else{ mist++; r.classList.add('wrong'); selL.classList.add('wrong'); await sleep(550); r.classList.remove('wrong'); selL.classList.remove('wrong','sel'); selL=null; busy=false; }
+    }
+  });
+};
+
+/* --- Satz hören, Bedeutung wählen --- */
+EX.listensent=(host,it,ctx)=>{
+  const s=SBYID.get(it.sid);
+  host.innerHTML=`${MODE_TAG('Hören und verstehen')}<div class="prompt">Was bedeutet der Satz?</div>
+    <div class="row" style="justify-content:center;gap:14px;margin:6px 0 14px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>
+    ${listenSent(s)}
+    <div class="opts long">${it.opts.map((o,i)=>`<button class="opt" data-i="${i}">${esc(o)}</button>`).join('')}</div>`;
+  bindAudio(host,sentenceText(s),sentParts(s));
+  autoSpeak(sentenceText(s));
+  let locked=false;
+  $$('.opt',host).forEach(b=>b.addEventListener('click',()=>{
+    if(locked) return; locked=true;
+    const ok=it.opts[+b.dataset.i]===s.de;
+    $$('.opt',host).forEach(x=>{ x.disabled=true; if(it.opts[+x.dataset.i]===s.de) x.classList.add('right'); });
+    if(!ok) b.classList.add('wrong');
+    ctx.finish({ok,title:ok?'Richtig!':'Das heißt:',html:`${rubyHtml(s,{sm:true})}<div style="font-weight:700">${esc(s.de)}</div>`});
+  }));
 };
 
 /* --- Schreibtraining: ein Wort mehrfach hintereinander schreiben --- */
@@ -373,6 +479,15 @@ function distractorsFor(s,info,n){
   if(pool.length<n+2){ for(const w of WORDS){ if(w.l!==1||have.has(w.h)||seen.has(w.h)) continue; seen.add(w.h); pool.push({h:w.h,p:wordPy(w),w:w.id}); } }
   return sample(pool,n);
 }
+/* Deutsche Kacheln: Wörter des Satzes ohne Satzzeichen */
+function germanTokens(de){ return String(de).replace(/[.,!?;:„“"…]/g,' ').split(/\s+/).filter(Boolean); }
+function germanDistractors(s,info,n){
+  const have=new Set(germanTokens(s.de).map(x=>x.toLowerCase()));
+  const pool=[]; const seen=new Set();
+  for(const x of info.sents){ if(x.id===s.id) continue; for(const t of germanTokens(x.de)){ const k=t.toLowerCase(); if(have.has(k)||seen.has(k)) continue; seen.add(k); pool.push({h:t}); } }
+  if(pool.length<n+2){ for(const x of SENTS){ if(x.id===s.id) continue; for(const t of germanTokens(x.de)){ const k=t.toLowerCase(); if(have.has(k)||seen.has(k)) continue; seen.add(k); pool.push({h:t}); } } }
+  return sample(pool,n);
+}
 function chooseItem(w,info,variant){
   const g=gloss(w); const same=info.words.filter(x=>x.id!==w.id&&gloss(x)!==g);
   const pool = same.length>=3 ? same : WORDS.filter(x=>x.l===1&&x.id!==w.id&&gloss(x)!==g);
@@ -386,17 +501,47 @@ function makeItems(type,scope,n){
   const sentPool = multi.length>=Math.min(n,6) ? multi : info.sents;
   const drawable=info.words.filter(w=>{ const c=[...w.h].filter(isHan).length; return c>=1&&c<=3; });
   if(type==='mixed'){
-    const plan=['choose','build','choose','speak','build','draw','dictate','choose','speak','draw','build','dictate'];
+    const plan=['choose','build','tones','cloze','speak','trans','draw','listensent','choose','pairs','dictate','speak','cloze','draw','build','trans','tones'];
     const k=Math.max(4,n); const types=[]; for(let i=0;i<k;i++) types.push(plan[i%plan.length]);
     for(const t of types){ const part=makeItems(t,scope,1); if(part[0]) out.push(part[0]); }
     return out;
   }
-  if(type==='choose') for(const w of pickWeighted(info.words,n,w=>weightOf(w.id))) out.push(chooseItem(w,info,variants[out.length%variants.length]));
-  else if(type==='build'||type==='dictate'||type==='speak'){
+  if(type==='tones'){
+    const single=ws=>ws.filter(w=>{ const ch=[...w.h].filter(isHan); return ch.length===1&&[...w.h].length===1&&toneOf(wordPy(w))>0; });
+    let c=single(info.words); if(c.length<6) c=single(WORDS.filter(w=>w.l===1));
+    for(const w of pickWeighted(c,n,w=>weightOf(w.id))) out.push({type:'tones',wid:w.id});
+  }
+  else if(type==='cloze'){
+    for(const s of pickWeighted(sentPool,n,sentWeight)){
+      const cand=s.t.map((t,i)=>({t,i})).filter(x=>!x.t.punc&&BYID.has(x.t.w));
+      if(!cand.length) continue; const pick=cand[Math.floor(Math.random()*cand.length)];
+      const have=new Set(s.t.map(t=>t.h)); const pool=info.words.filter(w=>!have.has(w.h)&&w.h!==pick.t.h);
+      const dis=sample(pool.length>=3?pool:WORDS.filter(w=>w.l===1&&!have.has(w.h)),3).map(w=>({h:w.h,p:wordPy(w)}));
+      out.push({type:'cloze',sid:s.id,idx:pick.i,opts:shuffle([{h:pick.t.h,p:pick.t.p},...dis])});
+    }
+  }
+  else if(type==='pairs'){
+    const rounds=Math.max(2,Math.round(n/3));
+    for(let r=0;r<rounds;r++){
+      const seen=new Set(), ids=[];
+      for(const w of shuffle(info.words)){ const g=gloss(w); if(seen.has(g)) continue; seen.add(g); ids.push(w.id); if(ids.length===5) break; }
+      if(ids.length>=3) out.push({type:'pairs',wids:ids});
+    }
+  }
+  else if(type==='listensent'){
+    for(const s of pickWeighted(sentPool,n,sentWeight)){
+      const other=sample(info.sents.filter(x=>x.id!==s.id&&x.de!==s.de),3).map(x=>x.de);
+      const more=other.length<3?sample(SENTS.filter(x=>x.id!==s.id&&x.de!==s.de&&!other.includes(x.de)),3-other.length).map(x=>x.de):[];
+      out.push({type:'listensent',sid:s.id,opts:shuffle([s.de,...other,...more])});
+    }
+  }
+  else if(type==='choose') for(const w of pickWeighted(info.words,n,w=>weightOf(w.id))) out.push(chooseItem(w,info,variants[out.length%variants.length]));
+  else if(type==='build'||type==='dictate'||type==='speak'||type==='trans'){
     for(const s of pickWeighted(sentPool,n,sentWeight)){
       const nt=s.t.filter(t=>!t.punc).length;
       const it={type,sid:s.id};
-      if(type!=='speak') it.dis=distractorsFor(s,info,nt<=2?3:2);
+      if(type==='trans') it.dis=germanDistractors(s,info,nt<=2?3:2);
+      else if(type!=='speak') it.dis=distractorsFor(s,info,nt<=2?3:2);
       out.push(it);
     }
   } else if(type==='draw') for(const w of pickWeighted(drawable,n,w=>weightOf(w.id))) out.push({type:'draw',wid:w.id,variant:Math.random()<0.4?'audio':'pinyin'});
@@ -423,6 +568,15 @@ function startWriteDrill(cfg){
   let off=0;
   const gen=()=>{ const out=[]; for(let i=0;i<per;i++){ const w=words[(off+i)%words.length]; out.push({type:'wdrill',wid:w.id,reps:cfg.reps,demo:cfg.demo,help:cfg.help}); } off=(off+per)%words.length; return out; };
   runSession({title:'Schreibtraining',items:gen(),kind:'practice',regen:per<words.length?gen:null,onExit:()=>renderView()});
+}
+/* Lektionstest: jedes Wort der Lektion einmal, nur Wörter, ohne Wiederholungsrunde */
+function startLessonTest(lessonId){
+  const l=LBYID.get(lessonId); if(!l) return;
+  const info=scopeInfo([lessonId]);
+  const variants=ttsUsable()?['read','rev','listen']:['read','rev'];
+  const words=shuffle([...info.words]);
+  const items=words.map((w,i)=>chooseItem(w,info,variants[i%variants.length]));
+  runSession({title:'Test: '+l.title,items,kind:'test',noRetry:true,lessonId,onExit:()=>renderView()});
 }
 function startLearn(lessonId){
   const l=LBYID.get(lessonId);

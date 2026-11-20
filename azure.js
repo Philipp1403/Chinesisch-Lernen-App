@@ -71,20 +71,46 @@ function azParse(json,s){
         seconds:Number(json.Duration)/1e7||0}};
 }
 
-/* Aufnahme + Bewertung. Antwort: {res} oder {error, detail} */
+/* Aufnahme + Bewertung. Antwort: {res, audio} oder {error, detail}
+   Das Mikrofon wird hier selbst geöffnet (getUserMedia), an das SDK weitergereicht und gleichzeitig mitgeschnitten,
+   damit man sich anhören kann. Am Ende werden Aufnahme und alle Spuren in jedem Fall gestoppt (Mikrofon-Anzeige geht aus). */
 async function azAssess(s,refText){
   let SDK;
   try{ SDK=await loadSdk(); }catch(e){ return {error:'sdk',detail:e.message}; }
+  let stream;
+  try{
+    stream=await Promise.race([navigator.mediaDevices.getUserMedia({audio:true}),new Promise((_,rj)=>setTimeout(()=>rj(new Error('keine Antwort vom Mikrofon nach 8 s')),8000))]);
+  }catch(e){ return {error:'mic',detail:(e&&e.name||'')+' '+(e&&e.message||'')}; }
+  let mr=null, mime=''; const chunks=[];
+  try{
+    if(window.MediaRecorder){
+      mime=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
+      mr=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+      mr.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+      mr.start();
+    }
+  }catch(_){ mr=null; }
+  const stopAll=()=>new Promise(res=>{
+    let ended=false; const end=()=>{ if(ended) return; ended=true; try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){} res(); };
+    if(mr&&mr.state!=='inactive'){ mr.onstop=end; try{ mr.stop(); }catch(_){ end(); } setTimeout(end,700); } else end();
+  });
   return new Promise(resolve=>{
-    let rec, done=false;
-    const fin=o=>{ if(done) return; done=true; azCurrent=null; try{ rec&&rec.close(); }catch(_){} resolve(o); };
+    let rec, audio, done=false, wd=null;
+    const fin=o=>{
+      if(done) return; done=true; azCurrent=null; clearTimeout(wd);
+      try{ rec&&rec.close(); }catch(_){}
+      try{ audio&&audio.close(); }catch(_){}
+      stopAll().then(()=>{ if(o&&!o.error&&chunks.length) o.audio=new Blob(chunks,{type:(mr&&mr.mimeType)||mime||'audio/mp4'}); resolve(o); });
+    };
     try{
       const cfg=SDK.SpeechConfig.fromSubscription(AZ.key,AZ.region.trim());
       cfg.speechRecognitionLanguage='zh-CN';
-      const audio=SDK.AudioConfig.fromDefaultMicrophoneInput();
+      try{ cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs,'1500'); cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,'6000'); }catch(_){}
+      audio=SDK.AudioConfig.fromStreamInput(stream);
       const pa=new SDK.PronunciationAssessmentConfig(refText,SDK.PronunciationAssessmentGradingSystem.HundredMark,SDK.PronunciationAssessmentGranularity.Phoneme,true);
       rec=new SDK.SpeechRecognizer(cfg,audio); pa.applyTo(rec);
       azCurrent={cancel:()=>fin({error:'aborted'})};
+      wd=setTimeout(()=>fin({error:'timeout'}),25000);
       rec.recognizeOnceAsync(r=>{
         if(done) return;
         if(r.reason===SDK.ResultReason.Canceled){
@@ -104,6 +130,8 @@ async function azAssess(s,refText){
 function azErrorText(code,detail=''){
   const d=String(detail);
   if(code==='aborted') return '';
+  if(code==='timeout') return 'Keine Antwort von Azure nach 30 Sekunden. Prüfe Internet und Region, dann nochmal versuchen.';
+  if(code==='mic'){ if(/NotAllowed|Permission|denied/i.test(d)) return 'Mikrofon blockiert. Erlaube den Zugriff in den Browser- bzw. iPad-Einstellungen.'; return 'Das Mikrofon lässt sich nicht öffnen ('+d.trim()+'). Unter Einstellungen, Diagnose siehst du mehr.'; }
   if(code==='no-speech') return 'Nichts verstanden. Tippe auf das Mikrofon und sprich den ganzen Satz deutlich.';
   if(code==='sdk') return 'Das Azure-Modul konnte nicht geladen werden. Öffne die App über deinen Webserver (nicht direkt aus der Vorschau).';
   if(/NotAllowed|Permission|denied|getUserMedia|microphone/i.test(d)) return 'Mikrofon blockiert. Erlaube den Zugriff in den Browser- bzw. iPad-Einstellungen.';

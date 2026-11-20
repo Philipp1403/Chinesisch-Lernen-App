@@ -94,10 +94,13 @@ function recognizeOnce(){
   return new Promise(resolve=>{
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR) return resolve({error:'unsupported'});
-    let finished=false, rec;
-    const fin=o=>{ if(finished) return; finished=true; activeRec=null; resolve(o); };
+    let finished=false, rec, heard=false;
+    const fin=o=>{ if(finished) return; finished=true; clearTimeout(wd); activeRec=null; resolve(o); };
+    /* Wenn der Browser nach 7 s nicht einmal die Aufnahme startet, reagiert die Erkennung nicht (typisch für iPad-Home-Bildschirm-Apps) */
+    const wd=setTimeout(()=>{ if(!heard){ try{ rec&&rec.abort(); }catch(_){} fin({error:'no-response'}); } },7000);
     try{
       rec=new SR(); rec.lang='zh-CN'; rec.interimResults=false; rec.continuous=false; rec.maxAlternatives=3;
+      rec.onaudiostart=()=>{ heard=true; }; rec.onstart=()=>{ heard=true; };
       rec.onresult=e=>{ const alts=[]; try{ for(const a of e.results[0]) alts.push(a.transcript); }catch(_){} fin(alts.length?{alts}:{error:'no-speech'}); };
       rec.onerror=e=>fin({error:e.error||'error'});
       rec.onnomatch=()=>fin({error:'no-speech'});
@@ -118,6 +121,7 @@ function speechErrorText(code){
     case 'audio-capture': return 'Kein Mikrofon gefunden.';
     case 'network': return 'Die Spracherkennung braucht eine Internetverbindung.';
     case 'language-not-supported': return 'Chinesisch wird von der Spracherkennung dieses Geräts nicht unterstützt.';
+    case 'no-response': return 'Die Spracherkennung des Browsers reagiert nicht. Auf dem iPad klappt sie oft nur im Safari-Tab, nicht in der App vom Home-Bildschirm. Unter Einstellungen, Diagnose siehst du, was genau fehlt.';
     case 'aborted': return '';
     default: return 'Die Aufnahme hat nicht geklappt ('+esc(code||'unbekannt')+').';
   }

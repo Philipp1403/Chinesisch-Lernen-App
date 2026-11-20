@@ -50,12 +50,13 @@ function viewLearn(m){
 
 function viewLesson(m){
   const l=LBYID.get(view.id); if(!l) return go('learn');
-  const p=lessonProgress(l);
-  const ex=['choose','build','speak','draw','wdrill','dictate','mixed'];
+  const p=lessonProgress(l); const tst=(state.ui.tests||{})[l.id];
+  const ex=['choose','pairs','build','trans','cloze','listensent','tones','dictate','speak','draw','wdrill','mixed'];
   m.innerHTML=`<div class="stack fade">
     <div class="pagehead"><button class="btn small" data-back>${ICON.back.replace('<svg','<svg width="18" height="18"')}Zurück</button></div>
     <div class="lhead" style="${lessonStyle(l)}"><div class="ic ${l.icon.length>1?'ic2':''}">${l.icon}</div><div class="grow"><h1>${esc(l.title)}</h1><p class="muted" style="font-weight:700">${esc(l.sub)}</p><div class="bar thin" style="margin-top:10px;max-width:260px"><i style="width:${p.learned/p.total*100}%"></i></div><div class="muted small" style="font-weight:800;margin-top:4px">${p.learned} von ${p.total} Wörtern gelernt</div></div></div>
     <button class="btn primary block big" data-learn>${p.learned===p.total?'Wörter nochmal ansehen':p.learned?'Weitere Wörter lernen':'Wörter lernen'}</button>
+    <button class="testcard" data-test><div class="ei">${ICON.cards}</div><div class="grow"><b>Lektionstest</b><span>${l.words.length} Fragen nur zu den Wörtern dieser Lektion${tst?`, letzter Stand ${tst.last}%, beste ${tst.best}%`:''}</span></div><span class="btn small">Starten</span></button>
     <div class="sectionhead"><h2>Üben</h2><span class="muted small" style="font-weight:700">nur diese Lektion</span></div>
     <div class="exgrid">${ex.map(t=>`<button class="excard" data-ex="${t}"><div class="ei">${ICON[TYPE_INFO[t].icon]}</div><div><b>${TYPE_INFO[t].name}</b><span>${TYPE_INFO[t].desc}</span></div></button>`).join('')}</div>
     <div class="sectionhead"><h2>Wörter</h2><span class="muted small" style="font-weight:700">Tippe zum Anhören</span></div>
@@ -66,6 +67,7 @@ function viewLesson(m){
   m.onclick=e=>{
     if(e.target.closest('[data-back]')) return go('learn');
     if(e.target.closest('[data-learn]')) return startLearn(l.id);
+    if(e.target.closest('[data-test]')) return startLessonTest(l.id);
     const x=e.target.closest('[data-ex]'); if(x) return x.dataset.ex==='wdrill'?writeSetup([l.id]):startPractice(x.dataset.ex,[l.id]);
     const sy=e.target.closest('[data-say]'); if(sy) return void speak(BYID.get(+sy.dataset.say).h);
     const ss=e.target.closest('[data-sayS]'); if(ss) return void speak(sentenceText(SBYID.get(+ss.dataset.sayS)),{parts:sentParts(SBYID.get(+ss.dataset.sayS))});
@@ -75,7 +77,7 @@ function viewLesson(m){
 
 /* ============ Üben ============ */
 function viewPractice(m){
-  const types=['choose','build','speak','draw','wdrill','dictate','mixed'];
+  const types=['choose','pairs','build','trans','cloze','listensent','tones','dictate','speak','draw','wdrill','mixed'];
   const scope=state.ui.scope||[];
   const label=scope.length?(scope.length===1?LBYID.get(scope[0]).title:`${scope.length} Lektionen`):'Alle Lektionen';
   m.innerHTML=`<div class="stack fade">
@@ -242,6 +244,40 @@ function wordSheet(id){
   });
 }
 
+/* ============ Diagnose ============ */
+async function runDiag(out){
+  const L=[]; const add=(t,cls='')=>{ L.push(`<div class="${cls}">${t}</div>`); out.innerHTML=L.join(''); };
+  const standalone = navigator.standalone===true || matchMedia('(display-mode: standalone)').matches;
+  add(`Start: <b>${standalone?'App vom Home-Bildschirm':'Safari-Tab'}</b>`);
+  add(`Sichere Verbindung (https): <b>${isSecureContext?'ja':'nein'}</b>`);
+  add(`Sprachausgabe: <b>${'speechSynthesis' in window?'vorhanden':'fehlt'}</b>, chinesische Stimmen: <b>${zhVoices.length}</b>${zhVoices[0]?' ('+esc(zhVoices[0].name)+')':''}`);
+  add(`Spracherkennung des Browsers: <b>${speechSupported()?'vorhanden':'fehlt'}</b>`);
+  add(`Azure: <b>${azActive()?'aktiv':azConfigured()?'eingerichtet, aber die Engine steht auf Browser':'nicht eingerichtet'}</b>`);
+  add('Sprachausgabe-Probe: gleich kommt „nǐ … hǎo … nǐhǎo“ langsam. Hörst du etwas?');
+  window.__tts.length=0; const t0=performance.now();
+  await speak('你好',{slow:true});
+  add(`Ablauf (${Math.round(performance.now()-t0)} ms): ${window.__tts.length?esc(window.__tts.join(' | ')):'<b>keine Ereignisse, die Sprachausgabe hat nichts gemeldet</b>'}`);
+  add('Mikrofon: Zugriff wird angefragt …');
+  let stream;
+  try{
+    stream=await Promise.race([navigator.mediaDevices.getUserMedia({audio:true}),new Promise((_,rj)=>setTimeout(()=>rj(new Error('keine Antwort nach 8 s')),8000))]);
+  }catch(e){ add(`Mikrofon: <b>Fehler</b> ${esc((e&&e.name||'')+' '+(e&&e.message||''))}`,'bad'); return; }
+  const tr=stream.getAudioTracks()[0];
+  add(`Mikrofon: Zugriff erteilt${tr?`, Spur „${esc(tr.label||'ohne Name')}“, Zustand ${esc(tr.readyState)}${tr.muted?', <b>stumm geschaltet</b>':''}`:''}`);
+  add('Sprich jetzt 3 Sekunden lang, zum Beispiel „nǐ hǎo“ …');
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; const ac=new AC(); try{ await ac.resume(); }catch(_){}
+    const an=ac.createAnalyser(); an.fftSize=1024; ac.createMediaStreamSource(stream).connect(an);
+    const buf=new Uint8Array(an.fftSize); let peak=0; const end=Date.now()+3000;
+    while(Date.now()<end){ an.getByteTimeDomainData(buf); for(const v of buf) peak=Math.max(peak,Math.abs(v-128)); await sleep(50); }
+    const st=ac.state; try{ ac.close(); }catch(_){}
+    const pct=Math.round(peak/128*100);
+    add(`Pegel: <b>${pct} %</b> (AudioContext: ${esc(st)}). ${pct>6?'Der Ton kommt an.':'Es kommt kein Ton an: Mikrofon stumm, blockiert oder von einer anderen App belegt.'}`,pct>6?'':'bad');
+  }catch(e){ add(`Pegelmessung nicht möglich: ${esc(String(e&&e.message||e))}`,'bad'); }
+  stream.getTracks().forEach(t=>t.stop());
+  add('Fertig. Schick mir diese Zeilen als Screenshot, wenn etwas nicht klappt.');
+}
+
 /* ============ Einstellungen ============ */
 function viewSettings(m){
   const s=state.settings;
@@ -257,6 +293,7 @@ function viewSettings(m){
     </div>
     <div class="card"><h3 style="margin-bottom:6px">Anzeige</h3>
       <div class="set"><div class="l"><b>Text beim Hören anzeigen</b><span>Zeichen und Pinyin sichtbar, wenn die App etwas vorspricht</span></div><button class="sw" role="switch" aria-checked="${s.showText}" data-sw="showText" aria-label="Text beim Hören anzeigen"></button></div>
+      <div class="set"><div class="l"><b>Töne farbig anzeigen</b><span>Pinyin und Zeichen nach Ton einfärben (rot, grün, blau, lila)</span></div><button class="sw" role="switch" aria-checked="${s.tones}" data-sw="tones" aria-label="Töne farbig"></button></div>
       <div class="set"><div class="l"><b>Pinyin auf Kacheln</b><span>Bei Satz bauen und Hören und schreiben</span></div><button class="sw" role="switch" aria-checked="${s.pinyin}" data-sw="pinyin" aria-label="Pinyin auf Kacheln"></button></div>
       <div class="set"><div class="l"><b>Strichhilfe beim Schreiben</b><span>Blasse Vorlage des Zeichens</span></div><button class="sw" role="switch" aria-checked="${s.outline}" data-sw="outline" aria-label="Strichhilfe"></button></div>
       <div class="set"><div class="l"><b>Aufgaben pro Runde</b></div><select id="per">${[5,8,10,12,15].map(n=>`<option ${s.perRound===n?'selected':''}>${n}</option>`).join('')}</select></div>
@@ -293,6 +330,10 @@ function viewSettings(m){
         <p class="small muted" style="font-weight:600;margin-top:10px">Hinweis: Azure bewertet für Chinesisch Genauigkeit, Flüssigkeit und Vollständigkeit pro Wort. Ein eigener Wert für die Töne ist in der Microsoft-Dokumentation für Mandarin nicht vorgesehen. Falsche Töne fließen aber in die Genauigkeit ein, wenn der Dienst sie als Abweichung erkennt.</p>
       </details>
     </div>
+    <div class="card"><h3 style="margin-bottom:6px">Diagnose</h3>
+      <p class="muted small" style="font-weight:600;margin-bottom:12px">Prüft Schritt für Schritt Sprachausgabe, Mikrofon und Spracherkennung auf diesem Gerät und zeigt genau, wo etwas hakt. Sprich, wenn die App es sagt.</p>
+      <div class="row"><button class="btn" data-diag>Sprache und Mikrofon prüfen</button></div><div id="diagres" class="small diag" style="margin-top:14px;font-weight:600"></div>
+    </div>
     <div class="card"><h3 style="margin-bottom:6px">Sicherung</h3>
       <p class="muted small" style="font-weight:600;margin-bottom:12px">Der Fortschritt liegt nur in diesem Browser. Mit der Sicherung kannst du ihn auf ein anderes Gerät mitnehmen.</p>
       <div class="row"><button class="btn" data-export>Sicherung kopieren</button><button class="btn" data-import>Aus Text wiederherstellen</button></div>
@@ -312,7 +353,7 @@ function viewSettings(m){
     if(e.target.id==='theme'){ s.theme=e.target.value; save(); applyTheme(); }
   });
   m.onclick=async e=>{
-    const sw=e.target.closest('[data-sw]'); if(sw){ const k=sw.dataset.sw; s[k]=!s[k]; save(); sw.setAttribute('aria-checked',String(s[k])); return; }
+    const sw=e.target.closest('[data-sw]'); if(sw){ const k=sw.dataset.sw; s[k]=!s[k]; save(); sw.setAttribute('aria-checked',String(s[k])); if(k==='tones') applyTones(); return; }
     const t=e.target.closest('[data-t]'); if(t){ speak('你好，很高兴认识你。',{slow:t.dataset.t==='s',parts:['你好','很','高兴','认识','你']}); return; }
     if(e.target.closest('[data-mictest]')){
       const out=$('#micres',m);
@@ -329,6 +370,7 @@ function viewSettings(m){
       AZ.region=rg; if(k) AZ.key=k; azSave(); out.textContent='Gespeichert. Mit „Azure testen“ prüfst du, ob alles stimmt.'; setTimeout(renderView,700); return;
     }
     if(e.target.closest('[data-locknow]')){ lockNow(); return; }
+    if(e.target.closest('[data-diag]')){ runDiag($('#diagres',m)); return; }
     if(e.target.closest('[data-azdel]')){ AZ.key=''; delete AZ.keyEnc; AZ.engine='browser'; azSave(); renderView(); return; }
     if(e.target.closest('[data-aztest]')){
       const out=$('#azres',m); const ref=SBYID.get(LESSONS[0].sentences[0]); const txt=sentenceText(ref);
