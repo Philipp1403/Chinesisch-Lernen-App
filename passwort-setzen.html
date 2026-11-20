@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>Hanyu: Passwort setzen</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:560px;margin:40px auto;padding:0 18px}input,textarea,button{font:inherit;width:100%;padding:10px;margin:6px 0;box-sizing:border-box}textarea{height:130px;font-family:monospace;font-size:13px}button{cursor:pointer}</style></head><body>
+<h1>Passwort für Hanyu setzen</h1>
+<p>Dieses Werkzeug läuft nur in deinem Browser und sendet nichts. Passwort eingeben, den erzeugten Text kopieren und den Inhalt der Datei <b>lock-config.js</b> damit ersetzen. Danach die Seite neu hochladen.</p>
+<input id="pw" type="password" placeholder="Passwort (mind. 12 Zeichen) oder Zahlencode (nur Ziffern, mind. 6)" autocomplete="new-password">
+<button id="go">Text erzeugen</button>
+<textarea id="out" readonly placeholder="Hier erscheint der Inhalt für lock-config.js"></textarea>
+<p id="msg"></p>
+<p>Passwort entfernen: den Inhalt von lock-config.js durch <code>window.HANYU_LOCK=null;</code> ersetzen. Wer das Passwort vergisst, kann es nicht zurückholen, dann einfach hier ein neues erzeugen. Der gespeicherte Azure-Schlüssel auf den Geräten muss danach neu eingetragen werden.</p>
+<script>
+const b64=u=>btoa(String.fromCharCode(...u));
+document.getElementById('go').onclick=async()=>{
+  const pw=document.getElementById('pw').value, msg=document.getElementById('msg');
+  const num=/^\d+$/.test(pw);
+  if(num?pw.length<6:pw.length<12){ msg.textContent=num?'Ein Zahlencode braucht mindestens 6 Ziffern.':'Bitte mindestens 12 Zeichen.'; return; }
+  const enc=new TextEncoder(), salt=crypto.getRandomValues(new Uint8Array(16)), iter=600000;
+  const base=await crypto.subtle.importKey('raw',enc.encode(pw.normalize('NFKC')),'PBKDF2',false,['deriveBits']);
+  const v=new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:new Uint8Array([...salt,...enc.encode('v')]),iterations:iter},base,256));
+  document.getElementById('out').value='window.HANYU_LOCK='+JSON.stringify(Object.assign({salt:b64(salt),iter,verifier:b64(v)},num?{len:pw.length}:{}))+';\n';
+  msg.textContent='Fertig. Kopiere den Text in lock-config.js.';
+};
+</script></body></html>
