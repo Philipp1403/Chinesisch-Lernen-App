@@ -45,7 +45,7 @@ Live: https://philipp1403.github.io/Chinesisch-Lernen-App/ (GitHub Pages, Branch
 
 ## Arbeitsweise
 - Philipp schickt Probleme als Screenshots, oft nacheinander. Erst alle sammeln, dann beheben, dann ein Update pushen. Danach auf der Live-Seite prüfen, ob die neue `sw.js`-Version (und die geänderten Dateien) ausgeliefert werden.
-- Änderungen direkt auf `main` committen und pushen (GitHub Pages veröffentlicht sofort), nachdem Lint und die betroffenen Tests grün sind.
+- Änderungen direkt auf `main` committen und pushen (GitHub Pages veröffentlicht sofort), nachdem Lint und die betroffenen Tests grün sind. Philipp erlaubt das ausdrücklich und dauerhaft für dieses Repo: kein eigener Branch, kein Pull Request, keine Rückfrage wegen `main`. Nach dem Push auf der Live-Seite prüfen, ob die neue `sw.js`-Version ausgeliefert wird.
 - Nach jedem Push Philipp sagen: App auf dem iPad zweimal komplett schließen und neu öffnen.
 - Den Chrome-Tab mit der GitHub-Seite nicht mehr nötig. Kein ZIP mehr bauen.
 
