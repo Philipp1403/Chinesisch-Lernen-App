@@ -12,6 +12,8 @@ async function azInit(){
     try{ AZ.key=await lockDecrypt(AZ.keyEnc); delete AZ.keyEnc; }catch(_){ AZ.key=''; } /* nicht lesbar (anderes Passwort): Eintrag bleibt unangetastet */
   }
   if(AZ.month!==azMonth()){ AZ.month=azMonth(); AZ.usageSec=0; }
+  /* Ist Azure eingerichtet und hat Philipp die Engine nie selbst gewählt, gilt Azure */
+  if(azConfigured()&&!AZ.engineSet&&AZ.engine!=='azure') AZ.engine='azure';
   azSave();
 }
 /* Speichern: mit App-Sperre liegt der Schlüssel nur verschlüsselt im Gerät */
@@ -79,16 +81,78 @@ async function micPrepare(){
   try{ while(Date.now()-t0<1500&&(speechSynthesis.speaking||speechSynthesis.pending)) await sleep(50); }catch(_){}
   await sleep(150);
 }
-const MIC_CONSTRAINTS={audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}};
-async function micOpen(){
-  return Promise.race([navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS),new Promise((_,rj)=>setTimeout(()=>rj(new Error('keine Antwort vom Mikrofon nach 8 s')),8000))]);
+/* Mikrofon-Einstellungen: Welche auf diesem Gerät Ton liefert, ermittelt die Diagnose. Die App merkt sich die beste (state.settings.micVar). */
+const MIC_VARIANTS=[
+  {id:'std',name:'Standard',c:{audio:true}},
+  {id:'raw',name:'Ohne Signalverarbeitung',c:{audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}},
+  {id:'old',name:'Mit Echo- und Rauschfilter, Mono',c:{audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}}},
+];
+const MIC_SIG=0.02; /* ab diesem Spitzenwert (2 %) gilt Ton als angekommen */
+const micVariant=()=>MIC_VARIANTS.find(v=>v.id===(state.settings.micVar||'std'))||MIC_VARIANTS[0];
+async function micOpen(c){
+  return Promise.race([navigator.mediaDevices.getUserMedia(c||micVariant().c),new Promise((_,rj)=>setTimeout(()=>rj(new Error('keine Antwort vom Mikrofon nach 8 s')),8000))]);
+}
+const REC_MIMES=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'];
+/* Misst über eine Mikrofon-Einstellung, wie viel Ton ankommt: Web Audio (Analyser und ScriptProcessor, beide fest bis zum Ausgang verbunden)
+   und getrennt davon die Aufnahme (MediaRecorder, danach dekodiert). So sieht man, ob der Ton schon im Mikrofonstrom fehlt oder erst in Web Audio. */
+async function micProbe(variant,ms=3000){
+  const out={id:variant.id,name:variant.name};
+  const AC=window.AudioContext||window.webkitAudioContext; let ac=null, stream=null, mr=null;
+  try{
+    await micPrepare();
+    stream=await micOpen(variant.c);
+    const tr=stream.getAudioTracks()[0]; out.label=tr&&tr.label; out.muted=!!(tr&&tr.muted); out.track=tr&&tr.readyState;
+    try{ out.settings=tr.getSettings(); }catch(_){}
+    ac=new AC(); try{ await ac.resume(); }catch(_){}
+    out.acState=ac.state; out.rate=ac.sampleRate;
+    const src=ac.createMediaStreamSource(stream), an=ac.createAnalyser(), proc=ac.createScriptProcessor(2048,1,1), mute=ac.createGain(); mute.gain.value=0;
+    an.fftSize=1024; src.connect(an); src.connect(proc); proc.connect(mute); an.connect(mute); mute.connect(ac.destination);
+    let pa=0, pp=0; const buf=new Uint8Array(an.fftSize);
+    proc.onaudioprocess=e=>{ const d=e.inputBuffer.getChannelData(0); for(let i=0;i<d.length;i++){ const v=Math.abs(d[i]); if(v>pp) pp=v; } };
+    const chunks=[]; let mime='';
+    if(window.MediaRecorder){
+      try{ mime=REC_MIMES.find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||''; mr=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+        mr.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); }; mr.start(); }catch(_){ mr=null; }
+    }
+    const end=Date.now()+ms;
+    while(Date.now()<end){ an.getByteTimeDomainData(buf); for(const v of buf){ const a=Math.abs(v-128)/128; if(a>pa) pa=a; } await sleep(40); }
+    out.peakAnalyser=pa; out.peakProc=pp;
+    if(mr&&mr.state!=='inactive'){ await new Promise(res=>{ mr.onstop=res; try{ mr.stop(); }catch(_){ res(); } setTimeout(res,1500); }); }
+    if(chunks.length){
+      try{ const d=await azDecode(new Blob(chunks,{type:mime||'audio/mp4'})); let m=0; for(let i=0;i<d.data.length;i++){ const v=Math.abs(d.data[i]); if(v>m) m=v; } out.peakRec=m; }
+      catch(e){ out.recErr=String(e&&e.message||e); }
+    } else out.recErr='keine Aufnahme';
+  }catch(e){ out.error=((e&&e.name)||'')+' '+((e&&e.message)||''); }
+  finally{ try{ stream&&stream.getTracks().forEach(t=>t.stop()); }catch(_){} try{ ac&&ac.close(); }catch(_){} }
+  return out;
+}
+/* Aufnahme (Blob) in Mono-Fließkommadaten umwandeln */
+async function azDecode(blob){
+  const AC=window.AudioContext||window.webkitAudioContext; const ac=new AC();
+  try{
+    const buf=await blob.arrayBuffer();
+    const au=await new Promise((res,rj)=>{ const p=ac.decodeAudioData(buf,res,rj); if(p&&p.then) p.then(res,rj); });
+    const n=au.length, ch=au.numberOfChannels, mono=new Float32Array(n);
+    for(let c=0;c<ch;c++){ const d=au.getChannelData(c); for(let i=0;i<n;i++) mono[i]+=d[i]/ch; }
+    return {data:mono,rate:au.sampleRate};
+  } finally { try{ ac.close(); }catch(_){} }
+}
+function azPcm16k(mono,rate){
+  const ratio=rate/16000, n=Math.floor(mono.length/ratio), out=new Int16Array(n); let peak=0;
+  for(let i=0;i<n;i++){
+    const a=Math.floor(i*ratio), b=Math.min(mono.length,Math.floor((i+1)*ratio)); let sum=0;
+    for(let k=a;k<b;k++) sum+=mono[k];
+    const v=Math.max(-1,Math.min(1,sum/Math.max(1,b-a))); if(Math.abs(v)>peak) peak=Math.abs(v);
+    out[i]=v<0?v*0x8000:v*0x7FFF;
+  }
+  return {pcm:out,peak};
 }
 
 /* Aufnahme + Bewertung. Antwort: {res, audio} oder {error, detail}
    Das Mikrofon wird hier selbst geöffnet und über einen eigenen AudioContext (16 kHz, 16 Bit) als Push-Stream an Azure geschickt.
    So bleibt der AudioContext unter eigener Kontrolle (iOS startet ihn sonst gern „angehalten“ und Azure hört nur Stille).
    Zusätzlich wird mitgeschnitten, damit man sich anhören kann. Am Ende wird alles geschlossen (Mikrofon-Anzeige geht aus). */
-async function azAssess(s,refText){
+async function azAssessLive(s,refText){
   /* AudioContext sofort und noch innerhalb des Tippens anlegen, bevor das erste await die Geste verbraucht */
   const AC=window.AudioContext||window.webkitAudioContext; let ac=null;
   try{ ac=new AC(); if(ac.resume) ac.resume().catch(()=>{}); }catch(_){ ac=null; }
@@ -103,7 +167,7 @@ async function azAssess(s,refText){
   let mr=null, mime=''; const chunks=[];
   try{
     if(window.MediaRecorder){
-      mime=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
+      mime=REC_MIMES.find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
       mr=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
       mr.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
       mr.start();
@@ -128,15 +192,13 @@ async function azAssess(s,refText){
       try{ rec&&rec.close(); }catch(_){}
       try{ audio&&audio.close(); }catch(_){}
       stopAll().then(()=>{
-        if(o&&!o.error&&chunks.length) o.audio=new Blob(chunks,{type:(mr&&mr.mimeType)||mime||'audio/mp4'});
+        if(o&&(!o.error||o.error==='silent')&&chunks.length) o.audio=new Blob(chunks,{type:(mr&&mr.mimeType)||mime||'audio/mp4'});
         if(o) o.peak=peak;
         resolve(o);
       });
     };
     try{
-      const cfg=SDK.SpeechConfig.fromSubscription(AZ.key,AZ.region.trim());
-      cfg.speechRecognitionLanguage='zh-CN';
-      try{ cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs,'1500'); cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,'6000'); }catch(_){}
+      const cfg=azConfigNew(SDK);
       push=SDK.AudioInputStream.createPushStream(SDK.AudioStreamFormat.getWaveFormatPCM(16000,16,1));
       audio=SDK.AudioConfig.fromStreamInput(push);
       src=ac.createMediaStreamSource(stream);
@@ -163,26 +225,68 @@ async function azAssess(s,refText){
       const silent=()=>peak<0.015;
       rec.recognizeOnceAsync(r=>{
         if(done) return;
-        if(r.reason===SDK.ResultReason.Canceled){
-          let d=''; try{ const c=SDK.CancellationDetails.fromResult(r); d=c.errorDetails||''; }catch(_){}
-          return fin({error:'canceled',detail:d});
-        }
-        if(r.reason!==SDK.ResultReason.RecognizedSpeech) return fin(silent()?{error:'silent',detail:'AudioContext '+ac.state}:{error:'no-speech'});
-        let json=null; try{ json=JSON.parse(r.properties.getProperty(SDK.PropertyId.SpeechServiceResponse_JsonResult)); }catch(_){}
-        const res=json&&azParse(json,s);
-        if(!res) return fin(silent()?{error:'silent',detail:'AudioContext '+ac.state}:{error:'no-speech'});
-        AZ.usageSec+=Math.max(res.az.seconds,1); azSave();
-        fin({res,raw:json});
+        fin(azResult(SDK,r,s,silent(),'AudioContext '+ac.state));
       },err=>fin({error:'canceled',detail:String(err)}));
     }catch(e){ fin({error:'start',detail:String(e&&e.message||e)}); }
   });
+}
+/* Ergebnis des Azure-Erkenners auswerten (Livemikrofon und Aufnahme teilen sich das) */
+function azResult(SDK,r,s,silent,silentDetail){
+  if(r.reason===SDK.ResultReason.Canceled){
+    let d=''; try{ const c=SDK.CancellationDetails.fromResult(r); d=c.errorDetails||''; }catch(_){}
+    return {error:'canceled',detail:d};
+  }
+  if(r.reason!==SDK.ResultReason.RecognizedSpeech) return silent?{error:'silent',detail:silentDetail}:{error:'no-speech'};
+  let json=null; try{ json=JSON.parse(r.properties.getProperty(SDK.PropertyId.SpeechServiceResponse_JsonResult)); }catch(_){}
+  const res=json&&azParse(json,s);
+  if(!res) return silent?{error:'silent',detail:silentDetail}:{error:'no-speech'};
+  AZ.usageSec+=Math.max(res.az.seconds,1); azSave();
+  return {res,raw:json};
+}
+function azConfigNew(SDK){
+  const cfg=SDK.SpeechConfig.fromSubscription(AZ.key,AZ.region.trim());
+  cfg.speechRecognitionLanguage='zh-CN';
+  try{ cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs,'1500'); cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,'6000'); }catch(_){}
+  return cfg;
+}
+/* Bewertung einer fertigen Aufnahme (16 kHz, 16 Bit, mono) */
+async function azAssessPcm(s,refText,pcm){
+  let SDK; try{ SDK=await loadSdk(); }catch(e){ return {error:'sdk',detail:e.message}; }
+  return new Promise(resolve=>{
+    let rec=null, audio=null, push=null, done=false, wd=null;
+    const fin=o=>{ if(done) return; done=true; azCurrent=null; clearTimeout(wd); try{ push&&push.close(); }catch(_){} try{ rec&&rec.close(); }catch(_){} try{ audio&&audio.close(); }catch(_){} resolve(o); };
+    try{
+      const cfg=azConfigNew(SDK);
+      push=SDK.AudioInputStream.createPushStream(SDK.AudioStreamFormat.getWaveFormatPCM(16000,16,1));
+      audio=SDK.AudioConfig.fromStreamInput(push);
+      const pa=new SDK.PronunciationAssessmentConfig(refText,SDK.PronunciationAssessmentGradingSystem.HundredMark,SDK.PronunciationAssessmentGranularity.Phoneme,true);
+      rec=new SDK.SpeechRecognizer(cfg,audio); pa.applyTo(rec);
+      azCurrent={cancel:()=>fin({error:'aborted'})}; wd=setTimeout(()=>fin({error:'timeout'}),25000);
+      const bytes=new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+      for(let o=0;o<bytes.length;o+=32000) push.write(bytes.slice(o,o+32000).buffer);
+      push.close(); push=null;
+      rec.recognizeOnceAsync(r=>{ if(!done) fin(azResult(SDK,r,s,false,'')); },err=>fin({error:'canceled',detail:String(err)}));
+    }catch(e){ fin({error:'start',detail:String(e&&e.message||e)}); }
+  });
+}
+/* Aufnahme + Bewertung mit Rückfall: Liefert Web Audio nur Stille, die Aufnahme (MediaRecorder) aber Ton, wird die Aufnahme bewertet.
+   Das ist auf dem iPad der Weg, wenn der Mikrofonstrom in Web Audio ankommt, aber leer ist. */
+async function azAssess(s,refText){
+  const r=await azAssessLive(s,refText);
+  if(r.error==='silent'&&r.audio){
+    try{
+      const d=await azDecode(r.audio), p=azPcm16k(d.data,d.rate);
+      if(p.peak>=MIC_SIG){ const r2=await azAssessPcm(s,refText,p.pcm); if(!r2.error){ r2.audio=r.audio; r2.viaRecorder=true; } return r2; }
+    }catch(_){}
+  }
+  return r;
 }
 function azErrorText(code,detail=''){
   const d=String(detail);
   if(code==='aborted') return '';
   if(code==='timeout') return 'Keine Antwort von Azure nach 30 Sekunden. Prüfe Internet und Region, dann nochmal versuchen.';
   if(code==='mic'){ if(/NotAllowed|Permission|denied/i.test(d)) return 'Mikrofon blockiert. Erlaube den Zugriff in den Browser- bzw. iPad-Einstellungen.'; return 'Das Mikrofon lässt sich nicht öffnen ('+d.trim()+'). Unter Einstellungen, Diagnose siehst du mehr.'; }
-  if(code==='silent') return 'Das Mikrofon liefert nur Stille. Schließe andere Apps mit Mikrofon, starte die App neu und prüfe unter Einstellungen, Diagnose den Pegel.';
+  if(code==='silent') return 'Das Mikrofon liefert nur Stille. Öffne Einstellungen, Diagnose: Der Mikrofon-Test probiert mehrere Einstellungen durch und merkt sich die, die Ton liefert.';
   if(code==='no-speech') return 'Nichts verstanden. Tippe auf das Mikrofon und sprich den ganzen Satz deutlich.';
   if(code==='sdk') return 'Das Azure-Modul konnte nicht geladen werden. Öffne die App über deinen Webserver (nicht direkt aus der Vorschau).';
   if(/NotAllowed|Permission|denied|getUserMedia|microphone/i.test(d)) return 'Mikrofon blockiert. Erlaube den Zugriff in den Browser- bzw. iPad-Einstellungen.';

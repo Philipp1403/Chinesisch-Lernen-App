@@ -299,24 +299,29 @@ async function runDiag(out){
   try{ add(`Sprachausgabe-Zustand: spricht ${speechSynthesis.speaking}, wartet ${speechSynthesis.pending}, pausiert ${speechSynthesis.paused}`); }catch(_){}
   add('Mikrofon wird vorbereitet (Sprachausgabe wird gestoppt) …');
   await micPrepare();
-  add('Mikrofon: Zugriff wird angefragt …');
-  let stream;
-  try{
-    stream=await micOpen();
-  }catch(e){ add(`Mikrofon: <b>Fehler</b> ${esc((e&&e.name||'')+' '+(e&&e.message||''))}`,'bad'); return; }
-  const tr=stream.getAudioTracks()[0];
-  add(`Mikrofon: Zugriff erteilt${tr?`, Spur „${esc(tr.label||'ohne Name')}“, Zustand ${esc(tr.readyState)}${tr.muted?', <b>stumm geschaltet</b>':''}`:''}`);
-  add('Sprich jetzt 3 Sekunden lang, zum Beispiel „nǐ hǎo“ …');
-  try{
-    const AC=window.AudioContext||window.webkitAudioContext; const ac=new AC(); try{ await ac.resume(); }catch(_){}
-    const an=ac.createAnalyser(); an.fftSize=1024; ac.createMediaStreamSource(stream).connect(an);
-    const buf=new Uint8Array(an.fftSize); let peak=0; const end=Date.now()+3000;
-    while(Date.now()<end){ an.getByteTimeDomainData(buf); for(const v of buf) peak=Math.max(peak,Math.abs(v-128)); await sleep(50); }
-    const st=ac.state; try{ ac.close(); }catch(_){}
-    const pct=Math.round(peak/128*100);
-    add(`Pegel: <b>${pct} %</b> (AudioContext: ${esc(st)}). ${pct>6?'Der Ton kommt an.':'Es kommt kein Ton an: Mikrofon stumm, blockiert oder von einer anderen App belegt.'}`,pct>6?'':'bad');
-  }catch(e){ add(`Pegelmessung nicht möglich: ${esc(String(e&&e.message||e))}`,'bad'); }
-  stream.getTracks().forEach(t=>t.stop());
+  const pc=x=>Math.round(x*100)+' %';
+  add(`Mikrofon-Test: Ich probiere nacheinander ${MIC_VARIANTS.length} Einstellungen. Sprich bei jedem Test 3 Sekunden lang laut und ohne Pause, zum Beispiel immer wieder „nǐ hǎo“.`);
+  const results=[];
+  for(let i=0;i<MIC_VARIANTS.length;i++){
+    const v=MIC_VARIANTS[i];
+    add(`Test ${i+1} von ${MIC_VARIANTS.length} (${esc(v.name)}): sprich jetzt …`);
+    const r=await micProbe(v,3000); results.push(r);
+    if(r.error){ add(`${esc(v.name)}: <b>Fehler</b> ${esc(r.error.trim())}`,'bad'); if(/NotAllowed|Permission|denied/i.test(r.error)) { add('Mikrofon blockiert. Erlaube den Zugriff in den Browser- bzw. iPad-Einstellungen.','bad'); return; } continue; }
+    const wa=Math.max(r.peakAnalyser,r.peakProc), best=Math.max(wa,r.peakRec||0);
+    add(`${esc(v.name)}: Web Audio <b>${pc(wa)}</b>, Aufnahme <b>${r.peakRec==null?(r.recErr?'nicht lesbar':'keine'):pc(r.peakRec)}</b>, AudioContext ${esc(r.acState)} (${r.rate} Hz), Spur „${esc(r.label||'ohne Name')}“${r.muted?', <b>stumm geschaltet</b>':''}`,best>=MIC_SIG?'':'bad');
+    await sleep(400);
+  }
+  try{ const dv=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput'); add(`Gefundene Mikrofone: <b>${dv.length}</b>${dv.length?' ('+dv.map(d=>esc(d.label||'ohne Name')).join(', ')+')':''}`); }catch(_){}
+  const ok=results.filter(r=>!r.error);
+  const viaWa=ok.find(r=>Math.max(r.peakAnalyser,r.peakProc)>=MIC_SIG), viaRec=ok.find(r=>(r.peakRec||0)>=MIC_SIG);
+  const pick=viaWa||viaRec;
+  if(pick){
+    state.settings.micVar=pick.id; save();
+    add(`Ergebnis: Ton kommt an. Die App nutzt ab jetzt „${esc(pick.name)}“.${viaWa?'':' Web Audio liefert Stille, die App bewertet daher die Aufnahme (dauert etwas länger).'}`);
+  } else if(ok.length){
+    add('Ergebnis: <b>Bei keiner Einstellung kommt Ton an.</b> Das Mikrofon ist geöffnet, liefert aber nur Stille. Das liegt dann nicht an der App, sondern am Gerät. Probiere der Reihe nach: andere Apps schließen (besonders Bildschirmaufnahme, Videoanruf, Diktierfunktion), iPad neu starten, die Seite im Safari-Tab statt vom Home-Bildschirm öffnen, in den iPad-Einstellungen den Mikrofon-Zugriff für Safari prüfen. Schick mir dann diesen Screenshot.','bad');
+  }
+  stopSpeak();
   add('Sprachausgabe-Probe (danach): gleich kommt „nǐ … hǎo … nǐhǎo“ langsam. Hörst du etwas?');
   window.__tts.length=0; const t0=performance.now();
   await speak('你好',{slow:true});
@@ -418,7 +423,7 @@ function viewSettings(m){
   m.addEventListener('change',e=>{
     if(e.target.id==='voice'){ s.voice=e.target.value; save(); }
     if(e.target.id==='per'){ s.perRound=+e.target.value; save(); }
-    if(e.target.id==='azengine'){ AZ.engine=e.target.value; azSave(); }
+    if(e.target.id==='azengine'){ AZ.engine=e.target.value; AZ.engineSet=true; azSave(); }
     if(e.target.id==='theme'){ s.theme=e.target.value; save(); applyTheme(); }
   });
   m.onclick=async e=>{
@@ -436,11 +441,11 @@ function viewSettings(m){
       const out=$('#azres',m);
       if(!rg){ out.textContent='Bitte eine Region eintragen, zum Beispiel westeurope.'; return; }
       if(!k && !AZ.key){ out.textContent='Bitte den Schlüssel einfügen.'; return; }
-      AZ.region=rg; if(k) AZ.key=k; azSave(); out.textContent='Gespeichert. Mit „Azure testen“ prüfst du, ob alles stimmt.'; setTimeout(renderView,700); return;
+      AZ.region=rg; if(k) AZ.key=k; if(!AZ.engineSet) AZ.engine='azure'; azSave(); out.textContent='Gespeichert. Mit „Azure testen“ prüfst du, ob alles stimmt.'; setTimeout(renderView,700); return;
     }
     if(e.target.closest('[data-locknow]')){ lockNow(); return; }
     if(e.target.closest('[data-diag]')){ runDiag($('#diagres',m)); return; }
-    if(e.target.closest('[data-azdel]')){ AZ.key=''; delete AZ.keyEnc; AZ.engine='browser'; azSave(); renderView(); return; }
+    if(e.target.closest('[data-azdel]')){ AZ.key=''; delete AZ.keyEnc; AZ.engine='browser'; AZ.engineSet=false; azSave(); renderView(); return; }
     if(e.target.closest('[data-aztest]')){
       const out=$('#azres',m); const ref=SBYID.get(LESSONS[0].sentences[0]); const txt=sentenceText(ref);
       out.innerHTML=`Sprich nach dem Tippen: <span class="hz" style="font-size:20px">${esc(txt)}</span> (Aufnahme endet bei einer Pause)`;
