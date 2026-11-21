@@ -305,16 +305,16 @@ EX.speak=(host,it,ctx)=>{
 /* --- Zeichen zeichnen --- */
 EX.draw=(host,it,ctx)=>{
   const w=BYID.get(it.wid), py=wordPy(w), audioOnly=it.variant==='audio';
-  host.innerHTML=`${MODE_TAG(audioOnly?'Hören und zeichnen':'Zeichen zeichnen')}
+  host.innerHTML=`<div class="dlay"><div class="dhead">${MODE_TAG(audioOnly?'Hören und zeichnen':'Zeichen zeichnen')}
     ${audioOnly?`<div class="prompt">Höre zu und zeichne das Wort</div>`:''}<div class="center" style="margin-top:4px"><span class="py">${pinyinHtml(py)}</span></div>
-    <div class="meaning" style="margin:8px 0 12px">${esc(gloss(w))}</div>
-    ${audioRow()}<div id="q" style="margin-top:14px"></div>`;
+    ${state.settings.showDe!==false?`<div class="meaning" style="margin:8px 0 12px">${esc(gloss(w))}</div>`:''}
+    ${audioRow()}</div><div class="dmain"><div id="q" style="margin-top:14px"></div></div></div>`;
   bindAudio(host,w.h);
   autoSpeak(w.h);
   let quiz=null, dead=false;
-  writeQuiz($('#q',host),w,{onFinish:({mistakes,gaveUp,chars})=>{
-    const ok=!gaveUp && mistakes<=chars*2;
-    ctx.finish({ok,title:gaveUp?'Das nächste Mal klappt es':mistakes===0?'Fehlerfrei!':ok?'Gut gezeichnet':'Übe es noch einmal',html:`<span class="hz">${hanziHtml(w.h,py)}</span> &nbsp;${esc(py)} &nbsp;=&nbsp; ${esc(gloss(w))}`});
+  writeQuiz($('#q',host),w,{onFinish:({mistakes,gaveUp,chars,score})=>{
+    const ok=score!=null?(!gaveUp&&score>=5):(!gaveUp && mistakes<=chars*2);
+    ctx.finish({ok,title:score!=null?`Score ${score} von 10`:gaveUp?'Das nächste Mal klappt es':mistakes===0?'Fehlerfrei!':ok?'Gut gezeichnet':'Übe es noch einmal',html:`<span class="hz">${hanziHtml(w.h,py)}</span> &nbsp;${esc(py)} &nbsp;=&nbsp; ${esc(gloss(w))}`});
   }}).then(q=>{ if(dead) q.destroy(); else quiz=q; }).catch(()=>{ $('#q',host).innerHTML='<p class="muted small center">Strichdaten konnten nicht geladen werden.</p>'; ctx.footer([{label:'Weiter',cls:'primary grow',onClick:()=>ctx.complete(null)}]); });
   return ()=>{ dead=true; if(quiz) quiz.destroy(); };
 };
@@ -327,11 +327,11 @@ EX.wcard=(host,it,ctx)=>{
   const s={t:[{h:w.h,p:w.p,w:w.id}]};
   const useAz=azActive(), supported=useAz||speechSupported();
   let busy=false, dead=false, quiz=null, speakOk=null, drawOk=null, myUrl=null, player=null;
-  host.innerHTML=`${MODE_TAG('Sprechen und zeichnen')}
+  host.innerHTML=`<div class="dlay"><div class="dhead">${MODE_TAG('Sprechen und zeichnen')}
     <div class="subprompt" id="wc-step"></div>
     <div class="meaning" style="margin:12px 0 6px;font-size:28px">${esc(gloss(w))}</div>
-    <div id="wc-show" class="center" style="min-height:40px"></div>
-    <div id="wc-body"></div>`;
+    <div id="wc-show" class="center" style="min-height:40px"></div></div>
+    <div class="dmain"><div id="wc-body"></div></div></div>`;
   const step=$('#wc-step',host), show=$('#wc-show',host), body=$('#wc-body',host);
   /* Das Zeichen bleibt verborgen, bis es gezeichnet ist; nur das Pinyin hilft */
   const reveal=()=>{ show.innerHTML=`<div class="center" style="margin:6px 0"><span class="py" style="font-size:24px">${pinyinHtml(py)}</span></div>`; };
@@ -487,12 +487,12 @@ EX.listensent=(host,it,ctx)=>{
 EX.wdrill=(host,it,ctx)=>{
   const w=BYID.get(it.wid), py=wordPy(w), N=it.reps;
   let r=0, phase='', quiz=null, dead=false, mist=0, replay=null;
-  host.innerHTML=`${MODE_TAG('Schreibtraining')}
+  host.innerHTML=`<div class="dlay"><div class="dhead">${MODE_TAG('Schreibtraining')}
     <div class="center"><span class="py">${pinyinHtml(py)}</span></div>
-    <div class="meaning" style="margin:6px 0 16px">${esc(gloss(w))}</div>
+    ${state.settings.showDe!==false?`<div class="meaning" style="margin:6px 0 16px">${esc(gloss(w))}</div>`:''}
     ${audioRow()}
-    <div class="dprog" id="dprog"></div>
-    <div id="q" style="margin-top:6px"></div>`;
+    <div class="dprog" id="dprog"></div></div>
+    <div class="dmain"><div id="q" style="margin-top:6px"></div></div></div>`;
   bindAudio(host,w.h);
   const q=$('#q',host), prog=$('#dprog',host);
   const setBar=()=>{ const b=$('.sbar .bar>i'); if(b) b.style.width=Math.round((SESS.i+(phase==='demo'?0:r/N))/SESS.total*100)+'%'; };
@@ -530,7 +530,7 @@ EX.review=(host,it,ctx)=>{
   const w=BYID.get(it.wid), py=wordPy(w), mode=it.mode, c=state.cards[w.id]||newCard();
   const front = mode==='read' ? `${MODE_TAG('Lesen')}<div class="subprompt">Was heißt das, und wie spricht man es aus?</div><div class="hz bighz" id="fronthz" style="margin:20px 0 10px">${esc(w.h)}</div>`
     : mode==='listen' ? `${MODE_TAG('Hören')}<div class="subprompt">Was bedeutet das Wort?</div><div class="row" style="justify-content:center;gap:14px;margin:26px 0 14px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>${listenWord(w)}`
-    : `${MODE_TAG('Schreiben')}<div class="center" style="margin-top:6px"><span class="py">${pinyinHtml(py)}</span></div><div class="meaning" style="margin:8px 0 10px">${esc(gloss(w))}</div>${audioRow()}<div id="q" style="margin-top:12px"></div>`;
+    : `<div class="dlay"><div class="dhead">${MODE_TAG('Schreiben')}<div class="center" style="margin-top:6px"><span class="py">${pinyinHtml(py)}</span></div>${state.settings.showDe!==false?`<div class="meaning" style="margin:8px 0 10px">${esc(gloss(w))}</div>`:''}${audioRow()}</div><div class="dmain"><div id="q" style="margin-top:12px"></div></div></div>`;
   host.innerHTML=front+`<div id="back"></div>`;
   bindAudio(host,w.h);
   const rate=(q)=>{ applyRating(w.id,q); save(); ctx.complete(q>0); };
