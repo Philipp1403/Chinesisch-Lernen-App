@@ -50,16 +50,11 @@ try:
     pg.evaluate("__app.startPractice('build',['gruss'])"); pg.wait_for_selector('.bank .tok')
     pg.evaluate("SESS.items=[{type:'build',sid:284,dis:[{h:'吃',p:'chī'},{h:'好',p:'hǎo'}]}]; SESS.total=1; SESS.i=0; showItem()"); pg.wait_for_selector('.bank .tok'); pg.wait_for_timeout(300)
     toks=pg.evaluate("[...document.querySelectorAll('.bank .tok')].map(t=>t.querySelector('.th').textContent+(t.classList.contains('pun')?'*':''))"); print('Kacheln',toks)
-    assert '，*' in toks,'Komma-Kachel fehlt'
-    for h in ['对不起','，','没关系']:
-        pg.evaluate("h=>{const b=[...document.querySelectorAll('.bank .tok:not(.ghost)')].find(t=>t.querySelector('.th').textContent===h); b.click();}",h); pg.wait_for_timeout(120)
-    e.shot('n35_build.png'); pg.click('.sfoot [data-fb="1"]'); pg.wait_for_selector('.sfoot.ok,.sfoot.no'); print('Ergebnis:',pg.inner_text('.sfoot').split('\n')[0])
-    assert pg.evaluate("document.querySelector('.sfoot').classList.contains('ok')"),'Satz mit Komma nicht als richtig gewertet'
-    # ohne Komma muss falsch sein
-    pg.evaluate("SESS.items=[{type:'build',sid:284,dis:[{h:'吃',p:'chī'}]}]; SESS.i=0; showItem()"); pg.wait_for_selector('.bank .tok'); pg.wait_for_timeout(300)
+    assert not any(t.endswith('*') or t in '，。、？！' for t in toks),'seit v20 gibt es keine Satzzeichen-Kacheln'
     for h in ['对不起','没关系']:
         pg.evaluate("h=>{const b=[...document.querySelectorAll('.bank .tok:not(.ghost)')].find(t=>t.querySelector('.th').textContent===h); b.click();}",h); pg.wait_for_timeout(120)
-    pg.click('.sfoot [data-fb="1"]'); pg.wait_for_selector('.sfoot.ok,.sfoot.no'); assert pg.evaluate("document.querySelector('.sfoot').classList.contains('no')"),'ohne Komma muss falsch sein'
+    e.shot('n35_build.png'); pg.click('.sfoot [data-fb="1"]'); pg.wait_for_selector('.sfoot.ok,.sfoot.no'); print('Ergebnis:',pg.inner_text('.sfoot').split('\n')[0])
+    assert pg.evaluate("document.querySelector('.sfoot').classList.contains('ok')"),'Satz ohne Satzzeichen nicht als richtig gewertet'
     # Satz ohne inneres Satzzeichen: keine Kachel
     pg.evaluate("SESS.items=[{type:'build',sid:8,dis:[{h:'吃',p:'chī'}]}]; SESS.i=0; showItem()"); pg.wait_for_selector('.bank .tok'); pg.wait_for_timeout(300)
     assert pg.evaluate("document.querySelectorAll('.bank .tok.pun').length")==0
