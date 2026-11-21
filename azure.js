@@ -153,17 +153,17 @@ function azPcm16k(mono,rate){
    So bleibt der AudioContext unter eigener Kontrolle (iOS startet ihn sonst gern „angehalten“ und Azure hört nur Stille).
    Zusätzlich wird mitgeschnitten, damit man sich anhören kann. Am Ende wird alles geschlossen (Mikrofon-Anzeige geht aus). */
 async function azAssessLive(s,refText){
-  /* AudioContext sofort und noch innerhalb des Tippens anlegen, bevor das erste await die Geste verbraucht */
-  const AC=window.AudioContext||window.webkitAudioContext; let ac=null;
-  try{ ac=new AC(); if(ac.resume) ac.resume().catch(()=>{}); }catch(_){ ac=null; }
+  const AC=window.AudioContext||window.webkitAudioContext; let ac=null; const t0=Date.now();
   const closeAc=()=>{ try{ ac&&ac.close(); }catch(_){} };
   let SDK;
-  try{ SDK=await loadSdk(); }catch(e){ closeAc(); return {error:'sdk',detail:e.message}; }
-  if(!ac){ return {error:'mic',detail:'Kein AudioContext verfügbar'}; }
+  try{ SDK=await loadSdk(); }catch(e){ return {error:'sdk',detail:e.message}; }
   await micPrepare();
   let stream;
-  try{ stream=await micOpen(); }catch(e){ closeAc(); return {error:'mic',detail:(e&&e.name||'')+' '+(e&&e.message||'')}; }
-  try{ if(ac.state!=='running') await ac.resume(); }catch(_){}
+  try{ stream=await micOpen(); }catch(e){ return {error:'mic',detail:(e&&e.name||'')+' '+(e&&e.message||'')}; }
+  /* AudioContext erst nach dem Mikrofon anlegen: genau die Reihenfolge, die der Mikrofon-Test auf dem iPad bewiesen hat (Pegel 42 %).
+     Vorher angelegt, kann iOS ihn beim Öffnen des Mikrofons anhalten, und Azure hört dann nur Stille. */
+  try{ ac=new AC(); await Promise.race([ac.resume(),sleep(1500)]); }catch(_){ ac=null; }
+  if(!ac){ try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){} return {error:'mic',detail:'Kein AudioContext verfügbar'}; }
   let mr=null, mime=''; const chunks=[];
   try{
     if(window.MediaRecorder){
@@ -188,12 +188,13 @@ async function azAssessLive(s,refText){
     let rec, audio, done=false, wd=null;
     const fin=o=>{
       if(done) return; done=true; azCurrent=null; clearTimeout(wd);
+      const acSt=ac.state;
       try{ push&&push.close(); }catch(_){}
       try{ rec&&rec.close(); }catch(_){}
       try{ audio&&audio.close(); }catch(_){}
       stopAll().then(()=>{
-        if(o&&(!o.error||o.error==='silent')&&chunks.length) o.audio=new Blob(chunks,{type:(mr&&mr.mimeType)||mime||'audio/mp4'});
-        if(o) o.peak=peak;
+        if(o&&(!o.error||o.error==='silent'||o.error==='no-speech')&&chunks.length) o.audio=new Blob(chunks,{type:(mr&&mr.mimeType)||mime||'audio/mp4'});
+        if(o){ o.peak=peak; o.dbg=`Web Audio ${acSt}, Spitze ${Math.round(peak*100)} %, Aufnahme ${chunks.reduce((a,c)=>a+c.size,0)} Byte, ${Date.now()-t0} ms`; }
         resolve(o);
       });
     };
@@ -273,11 +274,12 @@ async function azAssessPcm(s,refText,pcm){
    Das ist auf dem iPad der Weg, wenn der Mikrofonstrom in Web Audio ankommt, aber leer ist. */
 async function azAssess(s,refText){
   const r=await azAssessLive(s,refText);
-  if(r.error==='silent'&&r.audio){
+  if((r.error==='silent'||r.error==='no-speech')&&r.audio){
     try{
       const d=await azDecode(r.audio), p=azPcm16k(d.data,d.rate);
-      if(p.peak>=MIC_SIG){ const r2=await azAssessPcm(s,refText,p.pcm); if(!r2.error){ r2.audio=r.audio; r2.viaRecorder=true; } return r2; }
-    }catch(_){}
+      r.dbg=(r.dbg||'')+`, Aufnahme gelesen: Spitze ${Math.round(p.peak*100)} %`;
+      if(p.peak>=MIC_SIG){ const r2=await azAssessPcm(s,refText,p.pcm); r2.dbg=r.dbg+(r2.error?', zweiter Versuch: '+r2.error:', zweiter Versuch ok'); if(!r2.error){ r2.audio=r.audio; r2.viaRecorder=true; } return r2; }
+    }catch(e){ r.dbg=(r.dbg||'')+', Aufnahme nicht lesbar: '+String(e&&e.message||e); }
   }
   return r;
 }

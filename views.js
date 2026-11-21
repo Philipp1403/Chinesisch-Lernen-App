@@ -321,6 +321,13 @@ async function runDiag(out){
   } else if(ok.length){
     add('Ergebnis: <b>Bei keiner Einstellung kommt Ton an.</b> Das Mikrofon ist geöffnet, liefert aber nur Stille. Das liegt dann nicht an der App, sondern am Gerät. Probiere der Reihe nach: andere Apps schließen (besonders Bildschirmaufnahme, Videoanruf, Diktierfunktion), iPad neu starten, die Seite im Safari-Tab statt vom Home-Bildschirm öffnen, in den iPad-Einstellungen den Mikrofon-Zugriff für Safari prüfen. Schick mir dann diesen Screenshot.','bad');
   }
+  if(azActive()){
+    const ref=SBYID.get(LESSONS[0].sentences[0]), txt=sentenceText(ref);
+    add(`Azure-Test: Sprich jetzt <span class="hz" style="font-size:20px">${esc(txt)}</span> (die Aufnahme endet bei einer Pause) …`);
+    const r=await azAssess(ref,[...txt].filter(isHan).join(''));
+    if(r.error) add(`Azure-Test: <b>Fehler „${esc(r.error)}“</b> ${esc(r.detail||'')} ${esc(azErrorText(r.error,r.detail))} [${esc(r.dbg||'')}]`,'bad');
+    else add(`Azure-Test: Score <b>${r.res.score}</b>, verstanden „${esc(r.res.heard)}“${r.viaRecorder?' (über die Aufnahme)':''} [${esc(r.dbg||'')}]`);
+  }
   stopSpeak();
   add('Sprachausgabe-Probe (danach): gleich kommt „nǐ … hǎo … nǐhǎo“ langsam. Hörst du etwas?');
   window.__tts.length=0; const t0=performance.now();
@@ -450,7 +457,7 @@ function viewSettings(m){
       const out=$('#azres',m); const ref=SBYID.get(LESSONS[0].sentences[0]); const txt=sentenceText(ref);
       out.innerHTML=`Sprich nach dem Tippen: <span class="hz" style="font-size:20px">${esc(txt)}</span> (Aufnahme endet bei einer Pause)`;
       const r=await azAssess(ref,[...txt].filter(isHan).join(''));
-      if(r.error){ out.textContent=azErrorText(r.error,r.detail)+(r.detail?' (Details: '+String(r.detail).slice(0,160)+')':''); return; }
+      if(r.error){ out.textContent=azErrorText(r.error,r.detail)+(r.detail?' (Details: '+String(r.detail).slice(0,160)+')':'')+(r.dbg?' ['+r.dbg+']':''); return; }
       const a=r.res.az; $('#azuse',m).textContent=Math.round(AZ.usageSec/6)/10;
       out.innerHTML=`Funktioniert. Gesamt <b>${r.res.score}</b>, Genauigkeit ${a.accuracy}, Flüssigkeit ${a.fluency}, Vollständigkeit ${a.completeness}. Erkannt: <span class="hz" style="font-size:18px">${esc(r.res.heard)}</span><br>Wörter: ${a.words.map(w=>esc(w.w)+' '+w.acc+(w.type!=='None'?' ('+esc(w.type)+')':'')).join(' · ')}`;
       return;

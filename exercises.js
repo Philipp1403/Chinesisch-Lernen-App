@@ -267,7 +267,7 @@ EX.speak=(host,it,ctx)=>{
       note.textContent='Ich höre zu … sprich den ganzen Satz, Ende wird erkannt';
       const refText=[...text].filter(isHan).join('');
       const r=await azAssess(s,refText); busy=false; if(finished) return;
-      if(r.error){ idle(azErrorText(r.error,r.detail)||undefined); return; }
+      if(r.error){ const t=azErrorText(r.error,r.detail); idle(t?esc(t)+` <span class="small" style="opacity:.7">[${esc(r.dbg||r.detail||'')}]</span>`:undefined); return; }
       evaluate(null,r.res,r.audio); return;
     }
     note.textContent='Ich höre zu … tippe nochmal, wenn du fertig bist';

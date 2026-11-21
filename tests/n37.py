@@ -53,7 +53,7 @@ try:
     pg.evaluate("()=>{const a=window.__app;a.go('learn');a.startPractice('speak',[a.LESSONS[0].id])}"); pg.wait_for_selector('#mic'); pg.wait_for_timeout(400)
     toks=pg.evaluate("()=>{const it=window.__app.S.items[window.__app.S.i];const s=window.__app.SBYID.get(it.sid);return s.t.filter(t=>!t.punc).map(t=>t.h)}")
     words=[{'Word':x,'PronunciationAssessment':{'AccuracyScore':90,'ErrorType':'None'}} for x in toks]
-    pg.evaluate("(j)=>{window.__azjson=j; window.__azmode='first-silent'}",{'RecognitionStatus':'Success','Duration':20000000,'DisplayText':''.join(toks),'NBest':[{'Display':''.join(toks),'PronunciationAssessment':{'AccuracyScore':90,'FluencyScore':90,'CompletenessScore':100,'PronScore':90},'Words':words}]})
+    pg.evaluate("(j)=>{window.__azjson=j; window.__azmode='first-silent'; window.__recogs=0}",{'RecognitionStatus':'Success','Duration':20000000,'DisplayText':''.join(toks),'NBest':[{'Display':''.join(toks),'PronunciationAssessment':{'AccuracyScore':90,'FluencyScore':90,'CompletenessScore':100,'PronScore':90},'Words':words}]})
     pg.click('#mic'); pg.wait_for_selector('.scorebox',timeout=30000)
     print('Rückfall-Ergebnis: Score',pg.inner_text('.ring'),'| Erkenner-Aufrufe',pg.evaluate("window.__recogs"),'| gepusht',pg.evaluate("window.__pushed"))
     assert pg.evaluate("window.__recogs")==2,'zweiter Erkenner (Aufnahme) wurde nicht gestartet'
