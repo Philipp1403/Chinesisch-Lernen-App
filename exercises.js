@@ -314,9 +314,9 @@ EX.draw=(host,it,ctx)=>{
   bindAudio(host,w.h);
   autoSpeak(w.h);
   let quiz=null, dead=false;
-  writeQuiz($('#q',host),w,{onFinish:({mistakes,gaveUp,chars,score})=>{
-    const ok=score!=null?(!gaveUp&&score>=5):(!gaveUp && mistakes<=chars*2);
-    ctx.finish({ok,title:score!=null?`Score ${score} von 10`:gaveUp?'Das nächste Mal klappt es':mistakes===0?'Fehlerfrei!':ok?'Gut gezeichnet':'Übe es noch einmal',html:`<span class="hz">${hanziHtml(w.h,py)}</span> &nbsp;${esc(py)} &nbsp;=&nbsp; ${esc(gloss(w))}`});
+  writeQuiz($('#q',host),w,{onFinish:({mistakes,gaveUp,chars})=>{
+    const ok=!gaveUp && mistakes<=chars*2;
+    ctx.finish({ok,title:gaveUp?'Das nächste Mal klappt es':mistakes===0?'Fehlerfrei!':ok?'Gut gezeichnet':'Übe es noch einmal',html:`<span class="hz">${hanziHtml(w.h,py)}</span> &nbsp;${esc(py)} &nbsp;=&nbsp; ${esc(gloss(w))}`});
   }}).then(q=>{ if(dead) q.destroy(); else quiz=q; }).catch(()=>{ $('#q',host).innerHTML='<p class="muted small center">Strichdaten konnten nicht geladen werden.</p>'; ctx.footer([{label:'Weiter',cls:'primary grow',onClick:()=>ctx.complete(null)}]); });
   return ()=>{ dead=true; if(quiz) quiz.destroy(); };
 };

@@ -28,7 +28,7 @@ async function mountTiles(host,word,{autoplay=true,size=108}={}){
   if(autoplay) playAll();
   return {playAll};
 }
-/* Eigene Striche frei darstellen: richtige bleiben stehen wie gezeichnet, falsche verblassen */
+/* Eigene Striche frei darstellen: richtige bleiben stehen wie gezeichnet, falsche verblassen. Keine Bewertung, nur die Strichprüfung von Hanzi Writer im Hintergrund. */
 function freeLayer(box){
   const NS='http://www.w3.org/2000/svg';
   const svg=document.createElementNS(NS,'svg'); svg.setAttribute('class','freelayer');
@@ -47,34 +47,11 @@ function freeLayer(box){
   box.addEventListener('pointerdown',down); box.addEventListener('pointermove',move);
   box.addEventListener('pointerup',up); box.addEventListener('pointercancel',up);
   return {
+    /* Nach dem Fertigstellen (oder Aufgeben) nimmt das Feld keine Striche mehr an */
+    disable(){ box.removeEventListener('pointerdown',down); box.removeEventListener('pointermove',move); box.removeEventListener('pointerup',up); box.removeEventListener('pointercancel',up); if(cur){ cur.remove(); cur=null; } pending.forEach(p=>{ if(!p.classList.contains('ok')) p.remove(); }); pending.length=0; },
     accept(){ const p=pending.shift()||last; if(p){ p.classList.add('ok'); return p._pts||[]; } return []; },
     reject(){ const p=pending.shift()||last; if(p){ p.classList.add('bad'); setTimeout(()=>p.remove(),380); } }
   };
-}
-/* Score 1 bis 10: Abstand deiner Striche zur Mittellinie der richtigen Striche, Fehlversuche kosten Punkte */
-function resample(pts,n){
-  const L=[0]; for(let i=1;i<pts.length;i++) L.push(L[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
-  const tot=L[L.length-1]||1, out=[]; let j=0;
-  for(let k=0;k<n;k++){ const t=tot*k/(n-1); while(j<L.length-2&&L[j+1]<t) j++;
-    const seg=(L[j+1]-L[j])||1, f=Math.min(1,Math.max(0,(t-L[j])/seg)); out.push([pts[j][0]+(pts[j+1][0]-pts[j][0])*f,pts[j][1]+(pts[j+1][1]-pts[j][1])*f]); }
-  return out;
-}
-function strokeScore(user,median,tf){
-  if(user.length<2||!median||median.length<2) return 0;
-  const u=resample(user.map(([x,y])=>[(x-tf.tx)/tf.sx,(y-tf.ty)/tf.sy]),24), m=resample(median,24);
-  let d=0; for(let i=0;i<24;i++) d+=Math.hypot(u[i][0]-m[i][0],u[i][1]-m[i][1]);
-  d/=24; return Math.max(0,1-d/260);
-}
-function readTransform(box){
-  const g=box.querySelector('svg:not(.freelayer) g[transform]'); if(!g) return null;
-  const m=/translate\(([-\d.]+),\s*([-\d.]+)\)\s*scale\(([-\d.]+),\s*([-\d.]+)\)/.exec(g.getAttribute('transform')||''); if(!m) return null;
-  return {tx:+m[1],ty:+m[2],sx:+m[3],sy:+m[4]};
-}
-function drawScore(box,ch,strokes,mistakes){
-  const data=CHARS[ch], tf=readTransform(box); if(!data||!tf) return null;
-  const per=data.medians.map((med,i)=>strokes[i]?strokeScore(strokes[i],med,tf):0);
-  const mean=per.reduce((a,b)=>a+b,0)/Math.max(1,per.length);
-  return Math.max(1,Math.min(10,Math.round(1+9*mean-0.5*mistakes)));
 }
 /* Schreib-Quiz: alle Zeichen eines Wortes nebeneinander in einem Feld, eins nach dem anderen, echte Strichprüfung.
    free: true = freies Zeichnen (deine Striche bleiben wie gemalt), false = nachzeichnen (Striche rasten ein), sonst Einstellung.
@@ -83,7 +60,7 @@ async function writeQuiz(outer,word,{onFinish,outline,free:freeOpt,fit:fitOpt}={
   await ensureChars(word);
   const chars=[...word.h].filter(isHan), N=chars.length;
   const free=freeOpt===undefined?!!state.settings.freeDraw:!!freeOpt, showRef=state.settings.showRef!==false;
-  let idx=0, mistakes=0, gaveUp=false, done=false, writer=null, alive=true; const scores=[];
+  let idx=0, mistakes=0, gaveUp=false, done=false, writer=null, alive=true, layer=null, fitted=false, busy=false;
   const host=document.createElement('div'); outer.replaceChildren(host);
   host.innerHTML=`<div class="wbox" style="--n:${N}"></div><div class="wmsg" aria-live="polite"></div><div class="row wbtns" style="justify-content:center"><button class="btn small" data-q="solution">Lösung zeigen</button><button class="btn small quiet" data-q="restart">Zeichen neu</button></div>`;
   const box=$('.wbox',host), msg=$('.wmsg',host), btns=$('.wbtns',host);
@@ -103,44 +80,44 @@ async function writeQuiz(outer,word,{onFinish,outline,free:freeOpt,fit:fitOpt}={
   }
   function startChar(){
     if(done||!alive) return;
-    if(idx===0&&!scores.length) fit();
+    if(!fitted){ fitted=true; fit(); }
     /* frisches Element: alte Zeiger-Ereignisse des vorigen Versuchs bleiben nicht hängen */
     const old=cells[idx], cell=old.cloneNode(false); old.replaceWith(cell); cells[idx]=cell; mark();
     const size=Math.max(120,cell.clientWidth-4), T='rgba(0,0,0,0)';
     /* Freies Zeichnen: Hanzi Writer prüft nur im Hintergrund (unsichtbar), gezeigt werden deine eigenen Striche */
     const wr=writer=HanziWriter.create(cell,chars[idx],writerOpts(size,Object.assign({showCharacter:false,showOutline:outline===undefined?state.settings.outline:outline},free?{drawingColor:T,strokeColor:T,highlightColor:T,showHintAfterMisses:false,highlightOnComplete:false}:{})));
-    const fl=free?freeLayer(cell):null; const strokes=[]; const mistakes0=mistakes, ci=idx;
+    const fl=layer=free?freeLayer(cell):null; const ci=idx;
     say(N>1?`Zeichen ${idx+1} von ${N}: Striche in der richtigen Reihenfolge zeichnen`:'Zeichne die Striche in der richtigen Reihenfolge');
     wr.quiz({
       leniency:1.15,
       onMistake:()=>{ mistakes++; if(fl) fl.reject(); say('Nicht ganz, versuche den Strich nochmal','err'); },
-      onCorrectStroke:()=>{ if(fl) strokes.push(fl.accept()); say('Richtig','ok'); },
+      onCorrectStroke:()=>{ if(fl) fl.accept(); say('Richtig','ok'); },
       onComplete:async()=>{
-        if(free){
-          const sc=drawScore(cell,chars[ci],strokes,mistakes-mistakes0); scores.push(sc==null?7:sc);
-          say((N>1?`Zeichen ${ci+1} von ${N} geschafft`:'Geschafft')+` · Score ${sc==null?'-':sc} von 10`+(showRef&&N===1?' · so sieht es richtig aus':''),'ok');
-          if(showRef){ try{ wr.updateColor('strokeColor',cssv('--muted')||'#8a93b5'); wr.showCharacter({duration:250}); }catch(_){} }
-          idx++; if(idx<N) await sleep(showRef?1100:350);
-        } else { say(N>1?`Zeichen ${ci+1} von ${N} geschafft`:'Geschafft','ok'); idx++; if(idx<N) await sleep(450); }
+        if(fl) fl.disable();
+        say(N>1?`Zeichen ${ci+1} von ${N} geschafft`:'Geschafft','ok');
+        if(free&&showRef){ try{ wr.updateColor('strokeColor',cssv('--muted')||'#8a93b5'); wr.showCharacter({duration:250}); }catch(_){} }
+        idx++; if(idx<N) await sleep(free&&showRef?1100:450);
         if(!alive) return; if(idx<N) startChar(); else finish(); }
     });
   }
   function finish(){
     done=true; mark();
-    let score=null;
-    if(free){ score=gaveUp||!scores.length?1:Math.max(1,Math.round(scores.reduce((a,b)=>a+b,0)/scores.length)); }
+    if(layer) layer.disable();
     btns.style.display='none';
-    say(free?`Dein Score: ${score} von 10`:(mistakes===0?'Fehlerfrei':`${mistakes} Fehlstrich${mistakes===1?'':'e'}`),(free?score>=7:mistakes===0)?'ok':'');
-    if(onFinish) onFinish({mistakes,gaveUp,chars:N,score});
+    say(mistakes===0?'Fehlerfrei':`${mistakes} Fehlstrich${mistakes===1?'':'e'}`,mistakes===0?'ok':'');
+    if(onFinish) onFinish({mistakes,gaveUp,chars:N});
   }
   host.addEventListener('click',async e=>{
     const b=e.target.closest('[data-q]'); if(!b||done) return;
-    if(b.dataset.q==='restart'){ try{ writer&&writer.cancelQuiz(); }catch(_){} startChar(); }
+    if(b.dataset.q==='restart'){ if(busy) return; try{ writer&&writer.cancelQuiz(); }catch(_){} startChar(); }
     if(b.dataset.q==='solution'){
+      if(busy) return; busy=true;
       gaveUp=true; mistakes+=3; try{ writer.cancelQuiz(); }catch(_){}
-      if(free){ try{ writer.updateColor('strokeColor',cssv('--p')||'#4455E6'); }catch(_){} }
-      say('So geht es:'); await new Promise(r=>{ writer.animateCharacter({onComplete:r}); });
-      await sleep(500); if(!alive) return; idx++;
+      if(layer) layer.disable();
+      const cell=cells[idx], size=Math.max(120,cell.clientWidth-4); cell.innerHTML='';
+      const sw=HanziWriter.create(cell,chars[idx],writerOpts(size,{showCharacter:false,showOutline:true,strokeColor:cssv('--p')||'#4455E6'}));
+      writer=sw; say('So geht es:'); await new Promise(r=>{ sw.animateCharacter({onComplete:r}); });
+      await sleep(500); if(!alive) return; idx++; busy=false;
       if(idx<N) startChar(); else finish();
     }
   });

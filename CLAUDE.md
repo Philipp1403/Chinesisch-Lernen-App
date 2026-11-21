@@ -37,7 +37,7 @@ Live: https://philipp1403.github.io/Chinesisch-Lernen-App/ (GitHub Pages, Branch
 ## Prüfen
 - Lint: `tests/lint.sh` (installiert ESLint beim ersten Mal, bündelt alle JS-Dateien, Ziel: 0 Fehler, rund 60 Warnungen sind bekannt).
 - Browser-Test: `tests/run.sh n9` (Name des Tests ohne `.py`). Läuft in `tests/out`, dort liegen auch die Screenshots (nicht im Repo). Braucht Python 3, Playwright und Google Chrome unter `/usr/bin/google-chrome`. Die Tests laufen gegen eine Kopie der App ohne Passwortsperre (`tests/lib.py`, `testroot()`), weil im Repo die echte Sperre liegt.
-- Wichtige Tests: `n3` (Übungen, Sprechen, Mikro-Fehler), `n9` (Azure-Attrappe: Push-Stream, Score, Fehlertexte), `n17` (langsame Sprachausgabe, Reihenfolge der Silben), `n20` (Diagnose), `n21` (Paare, Lücke, Hören, Töne), `n22` (Karteikarten), `n31` (freies Zeichnen mit Score), `n18` (Screenshots aller Ansichten bei 820 px und 390 px).
+- Wichtige Tests: `n3` (Übungen, Sprechen, Mikro-Fehler), `n9` (Azure-Attrappe: Push-Stream, Score, Fehlertexte), `n17` (langsame Sprachausgabe, Reihenfolge der Silben), `n20` (Diagnose), `n21` (Paare, Lücke, Hören, Töne), `n22` (Karteikarten), `n31`, `n32`, `n33`, `n36` (freies Zeichnen, Lösung, Sperre nach dem Fertigstellen, kein Score), `n18` (Screenshots aller Ansichten bei 820 px und 390 px).
 - Tests für die Passwortsperre (`n12` bis `n16` in der Sandbox) liegen nicht im Repo, sie brauchen die Passphrase.
 - `window.__app` stellt Zustand und Startfunktionen für Tests bereit (`startPractice`, `startLearn`, `startReview`, `LESSONS`, `SBYID`, `S`).
 - `lock-config.js` im Repo ist die echte Sperre (nur der Hash). Beim Arbeiten nie durch eine Entwicklerversion ersetzen oder überschreiben.

@@ -136,7 +136,7 @@ function writeSetup(preScope){
     <div class="fieldlabel">Wie zeichnest du?</div>
     <div class="choice2" style="margin-bottom:22px">
       <button class="choice" data-mode="trace" aria-pressed="${c.mode==='trace'}"><b>Nachzeichnen</b><span>Du zeichnest der Vorlage nach, deine Striche rasten in die richtige Form ein</span></button>
-      <button class="choice" data-mode="free" aria-pressed="${c.mode==='free'}"><b>Frei zeichnen</b><span>Deine Striche bleiben so, wie du sie malst. Dafür musst du mehr auf die Form achten. Am Ende ein Score</span></button>
+      <button class="choice" data-mode="free" aria-pressed="${c.mode==='free'}"><b>Frei zeichnen</b><span>Deine Striche bleiben so, wie du sie malst. Dafür musst du mehr auf die Form achten, es gibt keine Bewertung</span></button>
     </div>
     <div class="fieldlabel">Vorlage im Hintergrund</div>
     <div class="row" style="margin-bottom:8px">${chip('help','fade','Nach und nach ausblenden',c.help)}${chip('help','on','Immer',c.help)}${chip('help','off','Nie',c.help)}</div>
@@ -344,7 +344,7 @@ function viewSettings(m){
       <div class="set"><div class="l"><b>Strichhilfe beim Schreiben</b><span>Blasse Vorlage des Zeichens</span></div><button class="sw" role="switch" aria-checked="${s.outline}" data-sw="outline" aria-label="Strichhilfe"></button></div>
       <div class="set"><div class="l"><b>Deutsche Bedeutung beim Zeichnen</b><span>Zeigt das deutsche Wort über der Zeichenfläche an</span></div><button class="sw" role="switch" aria-checked="${s.showDe!==false}" data-sw="showDe" aria-label="Deutsche Bedeutung beim Zeichnen"></button></div>
       <div class="set"><div class="l"><b>Freies Zeichnen</b><span>Deine Striche bleiben so, wie du sie malst, und rasten nicht in die Form ein. Die App prüft sie im Hintergrund trotzdem.</span></div><button class="sw" role="switch" aria-checked="${!!s.freeDraw}" data-sw="freeDraw" aria-label="Freies Zeichnen"></button></div>
-      <div class="set"><div class="l"><b>Richtige Form danach zeigen</b><span>Beim freien Zeichnen: nach jedem Zeichen siehst du die richtige Form hinter deinen Strichen. Der Score von 1 bis 10 kommt immer.</span></div><button class="sw" role="switch" aria-checked="${s.showRef!==false}" data-sw="showRef" aria-label="Richtige Form danach zeigen"></button></div>
+      <div class="set"><div class="l"><b>Richtige Form danach zeigen</b><span>Beim freien Zeichnen: nach jedem Zeichen siehst du die richtige Form hinter deinen Strichen.</span></div><button class="sw" role="switch" aria-checked="${s.showRef!==false}" data-sw="showRef" aria-label="Richtige Form danach zeigen"></button></div>
       <div class="set"><div class="l"><b>Aufgaben pro Runde</b></div><select id="per">${[5,8,10,12,15].map(n=>`<option ${s.perRound===n?'selected':''}>${n}</option>`).join('')}</select></div>
       <div class="set"><div class="l"><b>Design</b></div><select id="theme">${[['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(([k,t])=>`<option value="${k}" ${s.theme===k?'selected':''}>${t}</option>`).join('')}</select></div>
     </div>
