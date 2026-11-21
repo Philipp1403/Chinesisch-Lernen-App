@@ -50,6 +50,12 @@ function showItem(){
   stopSpeak(); abortListening();
   if(SESS.i>=SESS.items.length) return showDone();
   const it=SESS.items[SESS.i];
+  /* Karte, die erst in Kürze wieder dran ist (1-Minuten-Stufe): erst andere Karten zeigen, sonst kurz warten */
+  if(it.notBefore&&it.notBefore>Date.now()){
+    const j=SESS.items.findIndex((x,k)=>k>SESS.i&&(!x.notBefore||x.notBefore<=Date.now()));
+    if(j>SESS.i){ const [x]=SESS.items.splice(j,1); SESS.items.splice(SESS.i,0,x); return showItem(); }
+    return showWait(it);
+  }
   const pct=Math.round(SESS.i/SESS.items.length*100);
   $('.sbar .bar>i').style.width=pct+'%';
   const f=$('#sf'); f.className='sfoot hidden'; f.innerHTML='';
@@ -57,6 +63,14 @@ function showItem(){
   const ctx=makeCtx(it);
   try{ SESS.cleanup=EX[it.type](host,it,ctx)||null; }
   catch(err){ host.innerHTML=`<div class="card"><p>Diese Aufgabe konnte nicht geladen werden.</p><p class="muted small">${esc(err.message||err)}</p></div>`; ctx.footer([{label:'Weiter',cls:'primary grow',onClick:()=>ctx.next()}]); }
+}
+function showWait(it){
+  const f=$('#sf'); f.className='sfoot hidden'; f.innerHTML='';
+  const old=$('#sx'); const host=document.createElement('div'); host.id='sx'; host.className='sinner fade'; old.replaceWith(host);
+  host.innerHTML=`<div class="donebox"><div class="hz" style="font-size:64px;color:var(--p)">…</div><h1 style="margin-top:6px">Kurze Pause</h1><p class="muted" style="font-weight:700">Die nächste Karte ist in <b id="wt">0:00</b> dran. So behältst du Wörter besser.</p></div>`;
+  const tick=()=>{ const ms=it.notBefore-Date.now(); if(ms<=0){ clearInterval(iv); SESS.cleanup=null; showItem(); return; } const sec=Math.ceil(ms/1000); const el=$('#wt',host); if(el) el.textContent=Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); };
+  const iv=setInterval(tick,500); SESS.cleanup=()=>clearInterval(iv); tick();
+  makeCtx({}).footer([{label:'Jetzt weiter',cls:'primary grow',onClick:()=>{ it.notBefore=0; showItem(); }}]);
 }
 /* In welcher Fähigkeit liegt der Fehler? Bestimmt die Anzeige bei den schwierigen Wörtern */
 function hardKind(it){
@@ -154,7 +168,7 @@ EX.intro=(host,it,ctx)=>{
   mountTiles($('#tiles',host),w).catch(()=>{ $('#tiles',host).innerHTML='<p class="muted small">Strichdaten konnten nicht geladen werden.</p>'; });
   autoSpeak(w.h);
   ctx.footer([
-    {label:'Kenne ich schon',cls:'quiet',onClick:()=>{ ensureCard(w.id); applyRating(w.id,3); SESS.learned++; save(); ctx.next(); }},
+    {label:'Kenne ich schon',cls:'quiet',onClick:()=>{ ensureCard(w.id); applyRating(w.id,3,true); SESS.learned++; save(); ctx.next(); }},
     {label:'Weiter',cls:'primary grow',onClick:()=>{ ensureCard(w.id); SESS.learned++; save(); ctx.next(); }},
   ]);
 };
@@ -538,10 +552,18 @@ EX.review=(host,it,ctx)=>{
     : `<div class="dlay"><div class="dhead">${MODE_TAG('Schreiben')}<div class="center" style="margin-top:6px"><span class="py">${pinyinHtml(py)}</span></div>${state.settings.showDe!==false?`<div class="meaning" style="margin:8px 0 10px">${esc(gloss(w))}</div>`:''}${audioRow()}</div><div class="dmain"><div id="q" style="margin-top:12px"></div></div></div>`;
   host.innerHTML=front+`<div id="back"></div>`;
   bindAudio(host,w.h);
-  const rate=(q)=>{ applyRating(w.id,q); save(); ctx.complete(q>0); };
+  const rate=(q)=>{
+    const due=applyRating(w.id,q); save();
+    /* Nur die 1-Minuten-Stufe kommt in derselben Runde wieder (nach anderen Karten, sonst nach kurzer Pause) */
+    if(SESS&&SESS.kind==='review'&&due-Date.now()<=90000){
+      if(q===0) it.notBefore=due;   /* record() hängt die Karte bei "Nochmal" selbst wieder an */
+      else SESS.items.push({...it,retry:true,_rec:false,notBefore:due,mode:reviewMode(it.mode)});
+    }
+    ctx.complete(q>0);
+  };
   const ratingFooter=(sug)=>{
     const labels=['Nochmal','Schwer','Gut','Leicht'];
-    ctx.footerRaw(`<div class="rate" style="margin:0;width:100%">${labels.map((t,q)=>`<button class="r${q} ${sug===q?'sug':''}" data-rate="${q}">${t}<small>${dayLabel(sched(c,q).days)}</small></button>`).join('')}</div>`,
+    ctx.footerRaw(`<div class="rate" style="margin:0;width:100%">${labels.map((t,q)=>`<button class="r${q} ${sug===q?'sug':''}" data-rate="${q}">${t}<small>${stepLabel(sched(c,q).min)}</small></button>`).join('')}</div>`,
       e=>{ const b=e.target.closest('[data-rate]'); if(b) rate(+b.dataset.rate); });
   };
   function reveal(sug){
@@ -709,10 +731,14 @@ function startHardPractice(){
   const items=hardItems(12); if(!items.length) return;
   runSession({title:'Schwierige Wörter',items,kind:'practice',regen:()=>{ const x=hardItems(12); return x.length?x:null; },onExit:()=>renderView()});
 }
+function reviewModes(){
+  const m=state.settings.modes; const modes=[]; if(m.read) modes.push('read'); if(m.write) modes.push('write'); if(m.listen&&ttsUsable()) modes.push('listen'); if(!modes.length) modes.push('read');
+  return modes;
+}
+const reviewMode=(not)=>{ const ms=reviewModes(); const pool=ms.filter(x=>x!==not); const p=pool.length?pool:ms; return p[Math.floor(Math.random()*p.length)]; };
 function startReview(){
   const ids=dueIds().slice(0,30); if(!ids.length) return;
-  const m=state.settings.modes; const modes=[]; if(m.read) modes.push('read'); if(m.write) modes.push('write'); if(m.listen&&ttsUsable()) modes.push('listen'); if(!modes.length) modes.push('read');
   let last=null;
-  const items=ids.map(id=>{ let pool=modes.filter(x=>x!==last); if(!pool.length) pool=modes; const mode=pool[Math.floor(Math.random()*pool.length)]; last=mode; return {type:'review',wid:id,mode}; });
+  const items=ids.map(id=>{ const mode=reviewMode(last); last=mode; return {type:'review',wid:id,mode}; });
   runSession({title:'Wiederholen',items,kind:'review',onExit:()=>renderView()});
 }

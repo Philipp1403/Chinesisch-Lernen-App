@@ -549,3 +549,11 @@ html[data-tones=off] .t0,html[data-tones=off] .t1,html[data-tones=off] .t2,html[
   .opts.long .opt{min-height:56px}
   .listentext{padding-top:6px;padding-bottom:6px}
 }
+
+/* Lernleiter in Wiederholen */
+.ladder{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:8px}
+.lstep{display:flex;flex-direction:column;align-items:center;padding:10px 4px;border-radius:14px;border:2px solid var(--line);background:var(--card)}
+.lstep b{font-size:22px;line-height:1.1;color:var(--muted)}
+.lstep span{font-size:12.5px;font-weight:700;color:var(--muted);margin-top:2px}
+.lstep.has{border-color:var(--p);background:var(--p-soft)}
+.lstep.has b{color:var(--p)}

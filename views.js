@@ -194,18 +194,23 @@ function flashCard(){
 function viewReview(m){
   const due=dueIds().length, total=Object.keys(state.cards).length, today=state.log[todayKey()]||0;
   const next=Object.values(state.cards).filter(c=>c.d>Date.now()).sort((a,b)=>a.d-b.d)[0];
-  const mastered=Object.values(state.cards).filter(c=>c.i>=21).length;
+  const mastered=Object.values(state.cards).filter(c=>c.i>=30).length;
+  const nextTxt=!next?'Alles erledigt.':(()=>{ const ms=next.d-Date.now(); if(ms<3600000) return 'Als Nächstes fällig: in '+Math.max(1,Math.ceil(ms/60000))+' Min'; if(ms<86400000) return 'Als Nächstes fällig: in '+Math.round(ms/3600000)+' Std'; return 'Als Nächstes fällig: '+new Date(next.d).toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'}); })();
+  const perBox=LADDER.map((_,k)=>Object.values(state.cards).filter(c=>boxOf(c)===k).length);
   m.innerHTML=`<div class="stack fade">
-    <div><h1>Wiederholen</h1><p class="muted" style="font-weight:700;margin-top:2px">Karteikarten mit Abstand: Wörter, die du kennst, kommen seltener.</p></div>
+    <div><h1>Wiederholen</h1><p class="muted" style="font-weight:700;margin-top:2px">Lernleiter: Je sicherer du ein Wort kannst, desto seltener kommt es.</p></div>
     <div class="card" style="text-align:center;padding:28px 18px">
       <div class="muted small" style="font-weight:800">FÄLLIG</div>
       <div style="font-size:72px;font-weight:900;color:var(--p);line-height:1.1">${due}</div>
       <p class="muted" style="font-weight:700;margin:4px 0 20px">${total?`${total} Wörter im Stapel, ${mastered} gefestigt, heute ${today} bewertet`:'Noch keine Wörter im Stapel. Lerne zuerst Wörter in einer Lektion, dann erscheinen sie hier.'}</p>
-      ${due?`<button class="btn primary big block" data-start>Wiederholung starten</button>`:total?`<div class="infobox">${next?'Als Nächstes fällig: '+new Date(next.d).toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'}):'Alles erledigt.'}</div>
+      ${due?`<button class="btn primary big block" data-start>Wiederholung starten</button>`:total?`<div class="infobox">${nextTxt}</div>
         <button class="btn block" style="margin-top:12px" data-early>Trotzdem die nächsten 10 wiederholen</button>`:`<button class="btn primary big block" data-go-learn>Zu den Lektionen</button>`}
     </div>
     ${hardCard()}
     ${flashCard()}
+    ${total?`<div class="card"><h3 style="margin-bottom:4px">Lernleiter</h3>
+      <p class="muted small" style="font-weight:600;margin-bottom:12px">Nochmal: zurück auf 1 Min. Gut: eine Stufe hoch. Leicht: zwei Stufen hoch. Schwer: bleibt, bei langen Abständen eine Stufe zurück.</p>
+      <div class="ladder">${LADDER.map((m,k)=>`<div class="lstep ${perBox[k]?'has':''}"><b>${perBox[k]}</b><span>${stepLabel(m)}</span></div>`).join('')}</div></div>`:''}
     <div class="card"><h3 style="margin-bottom:10px">Kartenarten</h3>
       ${[['read','Lesen','Zeichen sehen, Bedeutung und Aussprache wissen'],['listen','Hören','Wort hören, Bedeutung wissen'],['write','Schreiben','Zeichen mit richtiger Strichfolge zeichnen']].map(([k,t,d])=>`<div class="set"><div class="l"><b>${t}</b><span>${d}</span></div><button class="sw" role="switch" aria-checked="${state.settings.modes[k]}" data-mode="${k}" aria-label="${t}"></button></div>`).join('')}
     </div>

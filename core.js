@@ -5,7 +5,7 @@ const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isHan = ch => /[㐀-鿿]/.test(ch);
 const DAY = 86400000;
-const APP_VERSION = 'v22'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
+const APP_VERSION = 'v23'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function dayStart(plus=0){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+plus); return d.getTime(); }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -120,23 +120,44 @@ function applyTheme(){
   const m=$('meta[name=theme-color]'); if(m) m.content = dark?'#0E1220':'#4455E6';
 }
 
-/* ============ Wiederholungs-Algorithmus (vereinfachtes SM-2) ============ */
-function sched(c,q){
-  let {e,i,r,l}=c;
-  if(q===0) return {e:Math.max(1.3,e-0.2),i:0,r:0,l:l+1,days:0};
-  let ni;
-  if(q===1){ e=Math.max(1.3,e-0.15); ni = r===0 ? 1 : Math.max(i+1,Math.round(i*1.2)); }
-  else if(q===2){ ni = r===0 ? 1 : r===1 ? 3 : Math.max(i+1,Math.round(i*e)); }
-  else { e=e+0.15; ni = r===0 ? 3 : r===1 ? 5 : Math.max(i+2,Math.round(i*e*1.3)); }
-  return {e,i:ni,r:r+1,l,days:ni};
+/* ============ Wiederholungs-Plan: Leiter mit festen Stufen ============
+   Jedes Wort steht auf einer Stufe (card.s). Der Abstand bis zur nächsten Wiederholung hängt nur von der Stufe ab:
+   1 Min, 15 Min, 1 Std, 1 Tag, 2 Tage, 4 Tage, 1 Woche, 2 Wochen, 1 Monat, 2 Monate, 4 Monate.
+   Nochmal: zurück auf Stufe 1. Schwer: auf kurzen Stufen bleiben, auf langen eine Stufe zurück. Gut: eine Stufe hoch. Leicht: zwei Stufen hoch.
+   Dreimal "Leicht" hintereinander bringt ein Wort von Stufe 1 auf 1 Woche (Stufe 7). Die Abstände sind meine Wahl nach Philipps Vorgabe, nicht die von Phase 6 (nicht belegt). */
+const LADDER=[1,15,60,1440,2880,5760,10080,20160,43200,86400,172800]; /* Minuten */
+function stepLabel(min){
+  if(min<60) return min+' Min'; if(min<1440) return Math.round(min/60)+' Std';
+  const d=Math.round(min/1440); if(d<7) return d+(d===1?' Tag':' Tage');
+  if(d<30){ const w=Math.round(d/7); return w+(w===1?' Woche':' Wochen'); }
+  const m=Math.round(d/30); return m+(m===1?' Monat':' Monate');
 }
-function dayLabel(d){ if(d===0) return 'gleich'; if(d===1) return '1 Tag'; if(d<30) return d+' Tage'; const m=Math.round(d/30); return m+(m===1?' Monat':' Monate'); }
-const newCard=()=>({e:2.5,i:0,r:0,l:0,d:Date.now()});
+/* Stufe einer Karte; Altbestand (nur Tage in c.i) wird auf die passende Stufe gelegt */
+function boxOf(c){
+  if(typeof c.s==='number') return Math.max(0,Math.min(LADDER.length-1,c.s));
+  if(!c.r||!c.i) return 0;
+  let b=3; for(let k=3;k<LADDER.length;k++) if(LADDER[k]<=c.i*1440) b=k;
+  return b;
+}
+function sched(c,q,known){
+  const b=boxOf(c); let nb;
+  if(q===0) nb=0;
+  else if(q===1) nb=b<=2?b:b-1;
+  else if(q===2) nb=b+1;
+  else nb=known?Math.max(b+2,3):b+2;
+  nb=Math.max(0,Math.min(LADDER.length-1,nb));
+  const min=LADDER[nb];
+  return {s:nb,min,i:min>=1440?Math.round(min/1440):0,r:(c.r||0)+1,l:(c.l||0)+(q===0?1:0),e:c.e||2.5};
+}
+const newCard=()=>({e:2.5,i:0,r:0,l:0,s:0,d:Date.now()});
 function ensureCard(id){ if(!state.cards[id]){ state.cards[id]=newCard(); return true; } return false; }
-function applyRating(id,q){
-  const c=state.cards[id]||newCard(); const s=sched(c,q);
-  state.cards[id]={e:s.e,i:s.i,r:s.r,l:s.l,d:s.days===0?Date.now():dayStart(s.days)};
+/* Bewertung anwenden; gibt den neuen Fälligkeitszeitpunkt zurück. known: "Kenne ich schon" springt mindestens auf Stufe 4 (1 Tag) */
+function applyRating(id,q,known){
+  const c=state.cards[id]||newCard(); const s=sched(c,q,known);
+  const due=s.min>=1440?dayStart(Math.round(s.min/1440)):Date.now()+s.min*60000;
+  state.cards[id]={e:s.e,i:s.i,r:s.r,l:s.l,s:s.s,d:due};
   const k=todayKey(); state.log[k]=(state.log[k]||0)+1;
+  return due;
 }
 function dueIds(){ const now=Date.now(); return Object.entries(state.cards).filter(([id,c])=>c.d<=now).sort((a,b)=>a[1].d-b[1].d).map(([id])=>+id); }
 /* Schwierige Wörter: Ein Fehler nimmt das Wort auf, HARD_OUT richtige Antworten in Folge nehmen es wieder heraus.
