@@ -290,14 +290,13 @@ async function runDiag(out){
   add(`Sprachausgabe: <b>${'speechSynthesis' in window?'vorhanden':'fehlt'}</b>, chinesische Stimmen: <b>${zhVoices.length}</b>${zhVoices[0]?' ('+esc(zhVoices[0].name)+')':''}`);
   add(`Spracherkennung des Browsers: <b>${speechSupported()?'vorhanden':'fehlt'}</b>`);
   add(`Azure: <b>${azActive()?'aktiv':azConfigured()?'eingerichtet, aber die Engine steht auf Browser':'nicht eingerichtet'}</b>`);
-  add('Sprachausgabe-Probe: gleich kommt „nǐ … hǎo … nǐhǎo“ langsam. Hörst du etwas?');
-  window.__tts.length=0; const t0=performance.now();
-  await speak('你好',{slow:true});
-  add(`Ablauf (${Math.round(performance.now()-t0)} ms): ${window.__tts.length?esc(window.__tts.join(' | ')):'<b>keine Ereignisse, die Sprachausgabe hat nichts gemeldet</b>'}`);
+  try{ add(`Sprachausgabe-Zustand: spricht ${speechSynthesis.speaking}, wartet ${speechSynthesis.pending}, pausiert ${speechSynthesis.paused}`); }catch(_){}
+  add('Mikrofon wird vorbereitet (Sprachausgabe wird gestoppt) …');
+  await micPrepare();
   add('Mikrofon: Zugriff wird angefragt …');
   let stream;
   try{
-    stream=await Promise.race([navigator.mediaDevices.getUserMedia({audio:true}),new Promise((_,rj)=>setTimeout(()=>rj(new Error('keine Antwort nach 8 s')),8000))]);
+    stream=await micOpen();
   }catch(e){ add(`Mikrofon: <b>Fehler</b> ${esc((e&&e.name||'')+' '+(e&&e.message||''))}`,'bad'); return; }
   const tr=stream.getAudioTracks()[0];
   add(`Mikrofon: Zugriff erteilt${tr?`, Spur „${esc(tr.label||'ohne Name')}“, Zustand ${esc(tr.readyState)}${tr.muted?', <b>stumm geschaltet</b>':''}`:''}`);
@@ -312,6 +311,10 @@ async function runDiag(out){
     add(`Pegel: <b>${pct} %</b> (AudioContext: ${esc(st)}). ${pct>6?'Der Ton kommt an.':'Es kommt kein Ton an: Mikrofon stumm, blockiert oder von einer anderen App belegt.'}`,pct>6?'':'bad');
   }catch(e){ add(`Pegelmessung nicht möglich: ${esc(String(e&&e.message||e))}`,'bad'); }
   stream.getTracks().forEach(t=>t.stop());
+  add('Sprachausgabe-Probe (danach): gleich kommt „nǐ … hǎo … nǐhǎo“ langsam. Hörst du etwas?');
+  window.__tts.length=0; const t0=performance.now();
+  await speak('你好',{slow:true});
+  add(`Ablauf (${Math.round(performance.now()-t0)} ms): ${window.__tts.length?esc(window.__tts.join(' | ')):'<b>keine Ereignisse, die Sprachausgabe hat nichts gemeldet</b>'}`);
   add('Fertig. Schick mir diese Zeilen als Screenshot, wenn etwas nicht klappt.');
 }
 

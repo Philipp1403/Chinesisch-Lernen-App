@@ -209,7 +209,7 @@ function speak(text,opts={}){
         u.onstart=()=>ttsLog('start '+t); u.onend=()=>{ ttsLog('ende '+t); if(last) fin(true); }; u.onerror=e=>{ ttsLog('fehler '+(e&&e.error||'')+' '+t); if(last) fin(false); };
         ss.speak(u); ttsLog('sprich '+t+' rate '+rate);
       });
-      setTimeout(()=>fin(false),3000+list.reduce((a,t)=>a+2500+t.length*1400,0));
+      setTimeout(()=>{ if(!done){ if(my===speakTick){ try{ ss.cancel(); }catch(_){} } ttsLog('zeitlimit, Warteschlange geleert'); fin(false); } },3000+list.reduce((a,t)=>a+2500+t.length*1400,0));
     }catch(e){ res(false); }
   });
 }
