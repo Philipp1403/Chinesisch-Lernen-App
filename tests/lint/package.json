@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "dependencies": {
+    "eslint": "^9.39.5",
+    "globals": "^17.14.0"
+  }
+}

@@ -1,0 +1,3 @@
+out/
+lint/node_modules/
+lint/bundle.js
