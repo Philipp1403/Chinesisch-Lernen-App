@@ -92,7 +92,7 @@ function makeCtx(it){
       if(ok===null||ok===undefined) return;
       if(!it.retry){ SESS.cntFirst++; if(ok) SESS.okFirst++; }
       if(!ok && !it.retry && it.wid) SESS.wrong.add(it.wid);
-      if(!ok && !it.retry && !SESS.noRetry){ SESS.items.push({...it,retry:true,_rec:false}); }
+      if(!ok && !SESS.noRetry){ SESS.items.push({...it,retry:true,_rec:false}); }
       if(it.wid) noteStat(it.wid,ok,hardKind(it));
       if(it.sid){ const s=SBYID.get(it.sid); for(const t of s.t) if(!t.punc) noteStat(t.w,ok,null); }
     },
