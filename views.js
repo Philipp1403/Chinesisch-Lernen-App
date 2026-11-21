@@ -60,9 +60,9 @@ function viewLesson(m){
     <div class="sectionhead"><h2>Üben</h2><span class="muted small" style="font-weight:700">nur diese Lektion</span></div>
     <div class="exgrid">${ex.map(t=>`<button class="excard" data-ex="${t}"><div class="ei">${ICON[TYPE_INFO[t].icon]}</div><div><b>${TYPE_INFO[t].name}</b><span>${TYPE_INFO[t].desc}</span></div></button>`).join('')}</div>
     <div class="sectionhead"><h2>Wörter</h2><span class="muted small" style="font-weight:700">Tippe zum Anhören</span></div>
-    <div class="card"><div class="wlist">${l.words.map(id=>{ const w=BYID.get(id), py=wordPy(w), c=state.cards[id]; return `<div class="wrow"><button class="ibtn sm" data-say="${id}" aria-label="Anhören">${ICON.speaker}</button><div class="hz" data-word="${id}">${hanziHtml(w.h,py)}</div><div class="mid" data-word="${id}"><div class="py">${pinyinHtml(py)}</div><div class="de">${esc(gloss(w))}</div></div><span class="dot ${c?'on':''}" title="${c?'gelernt':'noch nicht gelernt'}"></span></div>`; }).join('')}</div></div>
+    <div class="card"><div class="wlist">${l.words.map(id=>{ const w=BYID.get(id), py=wordPy(w), c=state.cards[id]; return `<div class="wrow"><button class="ibtn sm" data-say="${id}" aria-label="Anhören">${ICON.speaker}</button><button class="ibtn sm" data-slowword="${id}" aria-label="Langsam anhören">${ICON.slow}</button><div class="hz" data-word="${id}">${hanziHtml(w.h,py)}</div><div class="mid" data-word="${id}"><div class="py">${pinyinHtml(py)}</div><div class="de">${esc(gloss(w))}</div></div><span class="dot ${c?'on':''}" title="${c?'gelernt':'noch nicht gelernt'}"></span></div>`; }).join('')}</div></div>
     <div class="sectionhead"><h2>Beispielsätze</h2></div>
-    <div class="card"><div class="wlist">${l.sentences.map(id=>{ const s=SBYID.get(id); return `<div class="wrow" style="align-items:flex-start"><button class="ibtn sm" data-sayS="${id}" aria-label="Satz anhören">${ICON.speaker}</button><div class="mid">${rubyHtml(s,{sm:true}).replace('justify-content:center','')}<div class="de">${esc(s.de)}</div></div></div>`; }).join('')}</div></div>
+    <div class="card"><div class="wlist">${l.sentences.map(id=>{ const s=SBYID.get(id); return `<div class="wrow" style="align-items:flex-start"><button class="ibtn sm" data-sayS="${id}" aria-label="Satz anhören">${ICON.speaker}</button><button class="ibtn sm" data-slowsent="${id}" aria-label="Satz langsam anhören">${ICON.slow}</button><div class="mid">${rubyHtml(s,{sm:true}).replace('justify-content:center','')}<div class="de">${esc(s.de)}</div></div></div>`; }).join('')}</div></div>
   </div>`;
   m.onclick=e=>{
     if(e.target.closest('[data-back]')) return go('learn');
@@ -70,6 +70,8 @@ function viewLesson(m){
     if(e.target.closest('[data-test]')) return startLessonTest(l.id);
     const x=e.target.closest('[data-ex]'); if(x) return x.dataset.ex==='wdrill'?writeSetup([l.id]):startPractice(x.dataset.ex,[l.id]);
     const sy=e.target.closest('[data-say]'); if(sy) return void speak(BYID.get(+sy.dataset.say).h);
+    const sw=e.target.closest('[data-slowword]'); if(sw) return void speak(BYID.get(+sw.dataset.slowword).h,{slow:true});
+    const sws=e.target.closest('[data-slowsent]'); if(sws){ const q=SBYID.get(+sws.dataset.slowsent); return void speak(sentenceText(q),{slow:true,parts:sentParts(q)}); }
     const ss=e.target.closest('[data-sayS]'); if(ss) return void speak(sentenceText(SBYID.get(+ss.dataset.sayS)),{parts:sentParts(SBYID.get(+ss.dataset.sayS))});
     const wd=e.target.closest('[data-word]'); if(wd) return wordSheet(+wd.dataset.word);
   };
@@ -242,7 +244,7 @@ function wordTip(id,anchor){
   const w=BYID.get(id); if(!w) return;
   closeTip();
   const py=wordPy(w), d=document.createElement('div'); d.id='wtip'; d.setAttribute('role','dialog');
-  d.innerHTML=`<div class="wt-in"><div class="wt-hz hz">${hanziHtml(w.h,py)}</div><div class="wt-mid"><div class="py">${pinyinHtml(py)}</div><div class="wt-de">${esc(gloss(w))}</div>${w.de&&w.m?`<div class="wt-en">${esc(w.m)}</div>`:''}</div><div class="wt-act"><button class="ibtn sm fill" data-tipau aria-label="Anhören">${ICON.speaker}</button><button class="ibtn sm" data-tipmore aria-label="Mehr zum Wort">${ICON.list}</button><button class="ibtn sm" data-tipx aria-label="Schließen">${ICON.x}</button></div></div>`;
+  d.innerHTML=`<div class="wt-in"><div class="wt-hz hz">${hanziHtml(w.h,py)}</div><div class="wt-mid"><div class="py">${pinyinHtml(py)}</div><div class="wt-de">${esc(w.deFull||gloss(w))}</div>${w.de&&w.m?`<div class="wt-en">${esc(w.m)}</div>`:''}</div><div class="wt-act"><button class="ibtn sm fill" data-tipau aria-label="Anhören">${ICON.speaker}</button><button class="ibtn sm" data-tipslow aria-label="Langsam anhören">${ICON.slow}</button><button class="ibtn sm" data-tipmore aria-label="Mehr zum Wort">${ICON.list}</button><button class="ibtn sm" data-tipx aria-label="Schließen">${ICON.x}</button></div></div>`;
   document.body.appendChild(d);
   if(anchor){
     const r=anchor.getBoundingClientRect(), W=d.offsetWidth, H=d.offsetHeight, vw=innerWidth, vh=innerHeight;
@@ -251,6 +253,7 @@ function wordTip(id,anchor){
     d.style.top=top+'px'; d.style.left=left+'px';
   }
   $('[data-tipau]',d).addEventListener('click',()=>speak(w.h));
+  $('[data-tipslow]',d).addEventListener('click',()=>speak(w.h,{slow:true}));
   $('[data-tipx]',d).addEventListener('click',closeTip);
   $('[data-tipmore]',d).addEventListener('click',()=>{ closeTip(); wordSheet(id); });
   speak(w.h);

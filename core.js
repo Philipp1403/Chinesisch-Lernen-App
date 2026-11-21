@@ -64,11 +64,18 @@ async function loadData(){
   const d=await r1.json(), h=await r2.json();
   WORDS=d.words; CHARLEVEL=d.charLevel; BYID=new Map(WORDS.map(w=>[w.id,w]));
   LESSONS=h.lessons; LBYID=new Map(LESSONS.map((l,i)=>{ l.idx=i; l.hue=(i*37+215)%360; l.icon=LESSON_ICON[l.id]||'字'; return [l.id,l]; }));
-  for(const [id,de] of Object.entries(h.de)){ const w=BYID.get(+id); if(w) w.de=de; }
+  for(const [id,de] of Object.entries(h.de)){ const w=BYID.get(+id); if(w){ w.de=de; w.deFull=de; } }
+  /* Klammerzusätze wie "(höflich)" weglassen, außer sie unterscheiden zwei Wörter voneinander oder der Eintrag bestünde nur aus der Klammer */
+  const clean=t=>t.replace(/\s*\([^)]*\)/g,'').replace(/\s+/g,' ').trim();
+  const cnt=new Map();
+  for(const w of WORDS) if(w.deFull){ const k=clean(w.deFull); if(k) cnt.set(k,(cnt.get(k)||0)+1); }
+  for(const w of WORDS) if(w.deFull){ const c=clean(w.deFull); if(c && cnt.get(c)===1) w.de=c; }
   for(const l of LESSONS) for(const id of l.words){ const w=BYID.get(id); if(w) w.lesson=l.id; }
   SENTS=h.sentences; SBYID=new Map(SENTS.map(s=>[s.id,s]));
   for(const s of SENTS){
-    for(const t of s.t){ if(t.punc) continue; const cur=EXAMPLE.get(t.w); if(!cur || (SBYID.get(cur).t.length > s.t.length && s.t.length>=3)) EXAMPLE.set(t.w,s.id); }
+    /* Beispielsatz je Wort: der kürzeste Satz mit mindestens zwei Wörtern (ein Satz, der nur das Wort selbst ist, wäre sinnlos) */
+    const nw=s.t.filter(x=>!x.punc).length; if(nw<2) continue;
+    for(const t of s.t){ if(t.punc) continue; const cur=EXAMPLE.get(t.w); if(!cur || SBYID.get(cur).t.filter(x=>!x.punc).length>nw) EXAMPLE.set(t.w,s.id); }
   }
 }
 const gloss = w => w.de || w.m;
@@ -181,25 +188,28 @@ function speak(text,opts={}){
   return new Promise(res=>{
     if(!('speechSynthesis' in window)) return res(false);
     try{
-      if(speechSynthesis.speaking||speechSynthesis.pending) speechSynthesis.cancel();
-      if(speechSynthesis.paused) speechSynthesis.resume();
+      const ss=speechSynthesis;
+      const busy=ss.speaking||ss.pending;
+      if(busy) ss.cancel();
+      if(ss.paused) ss.resume();
       const v=pickVoice();
       const rate = slow ? Math.min(state.settings.slowRate,0.6) : state.settings.rate;
-      const one=(t,r)=>new Promise(r2=>{
-        const u=new SpeechSynthesisUtterance(t); u.lang='zh-CN'; if(v){ u.voice=v; u.lang=v.lang; }
-        u.rate=r; let fin=false; const d=()=>{ if(!fin){ fin=true; r2(); } };
-        u.onstart=()=>ttsLog('start '+t); u.onend=()=>{ ttsLog('ende'); d(); }; u.onerror=e=>{ ttsLog('fehler '+(e&&e.error||'')); d(); }; speechSynthesis.speak(u); ttsLog('sprich '+t+' rate '+r);
-        setTimeout(d,2500+t.length*1400);
+      /* Alles wird sofort und in einem Zug in die Warteschlange gelegt, ohne Warten auf Ereignisse oder Timer.
+         iOS spielt Sprache nur zuverlässig ab, wenn sie direkt beim Antippen gestartet wird, und verliert Ereignisse,
+         wenn man nach einem Abbruch (cancel) mit await weitermacht. Die Pausen kommen vom Komma hinter jeder Silbe. */
+      const list=[];
+      if(slow){ for(const p of speakParts(text,opts.parts)) list.push(p+'，'); }
+      list.push(text);
+      const make=(t,r,vol)=>{ const u=new SpeechSynthesisUtterance(t); u.lang='zh-CN'; if(v){ u.voice=v; u.lang=v.lang; } u.rate=r; if(vol!==undefined) u.volume=vol; return u; };
+      /* Nach einem Abbruch geht bei WebKit die erste neue Äußerung gern verloren: ein lautloser Platzhalter fängt das ab */
+      if(busy){ const pr=make('。',1,0); ss.speak(pr); ttsLog('platzhalter'); }
+      let done=false; const fin=ok=>{ if(!done){ done=true; res(ok&&my===speakTick); } };
+      list.forEach((t,i)=>{
+        const u=make(t,rate); const last=i===list.length-1;
+        u.onstart=()=>ttsLog('start '+t); u.onend=()=>{ ttsLog('ende '+t); if(last) fin(true); }; u.onerror=e=>{ ttsLog('fehler '+(e&&e.error||'')+' '+t); if(last) fin(false); };
+        ss.speak(u); ttsLog('sprich '+t+' rate '+rate);
       });
-      (async()=>{
-        if(!slow){ await one(text,rate); return res(my===speakTick); }
-        const parts=speakParts(text,opts.parts);
-        for(const p of parts){ if(my!==speakTick) return res(false); await one(p,rate); await sleep(380); }
-        if(my!==speakTick) return res(false);
-        if(parts.length) await sleep(250);
-        await one(text,rate);
-        res(my===speakTick);
-      })();
+      setTimeout(()=>fin(false),3000+list.reduce((a,t)=>a+2500+t.length*1400,0));
     }catch(e){ res(false); }
   });
 }
