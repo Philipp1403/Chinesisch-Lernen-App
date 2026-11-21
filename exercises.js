@@ -5,8 +5,9 @@ function rubyHtml(s,{marks=null,sm=false,blank=-1}={}){
   let out='', ci=0, ti=-1;
   for(const tok of s.t){
     ti++;
-    if(ti===blank){ out+=`<span class="ruby blank"><span class="r-py"></span><span class="r-hz">＿＿</span></span>`; continue; }
-    if(tok.punc){ out+=`<span class="ruby punc"><span class="r-py"></span><span class="r-hz">${esc(tok.h)}</span></span>`; continue; }
+    if(ti===blank){ out+=`<span class="ruby blank"><span class="r-py"></span><span class="r-hz">&nbsp;</span></span>`; continue; }
+    if(tok.punc){ if(tok.h==='。') continue;   /* der Schlusspunkt wird nicht angezeigt */
+      out+=`<span class="ruby punc"><span class="r-py"></span><span class="r-hz">${esc(tok.h)}</span></span>`; continue; }
     if(marks){
       const chars=[...tok.h], syl=charSylls(tok.h,tok.p);
       chars.forEach((c,i)=>{
@@ -359,7 +360,7 @@ EX.wcard=(host,it,ctx)=>{
   function afterSay(){ if(canDraw) drawPhase(); else finishCard(); }
   function sayPhase(note){
     step.textContent=canDraw?'Schritt 1 von 2: Sag das Wort auf Chinesisch':'Sag das Wort auf Chinesisch';
-    show.innerHTML=`<button class="slowbtn" data-hint>${ICON.speaker}Hinweis: Wort hören</button>`;
+    show.innerHTML=`<button class="slowbtn" data-hint>${ICON.speaker}Hinweis: Wort hören</button> <button class="slowbtn" data-hint="s">${ICON.slow}Langsam</button>`;
     if(!supported){
       body.innerHTML=`<div class="micwrap"><div class="infobox center">Spracherkennung ist hier nicht verfügbar. Sprich das Wort laut und bewerte dich selbst.</div></div>`;
       ctx.footer([{label:'Nicht gewusst',cls:'',onClick:()=>{ speakOk=false; reveal(); speak(w.h); afterSayBtn(); }},{label:'Gewusst',cls:'good grow',onClick:()=>{ speakOk=true; afterSay(); }}]);
@@ -392,7 +393,7 @@ EX.wcard=(host,it,ctx)=>{
     ctx.footer([{label:'Nochmal sprechen',cls:'',onClick:()=>{ speakOk=null; show.innerHTML=''; sayPhase(); }},{label:canDraw?'Weiter zum Zeichnen':'Weiter',cls:'primary grow big',onClick:afterSay}]);
   }
   host.addEventListener('click',e=>{
-    if(e.target.closest('[data-hint]')){ speak(w.h); return; }
+    const hb=e.target.closest('[data-hint]'); if(hb){ speak(w.h,{slow:hb.dataset.hint==='s'}); return; }
     if(e.target.closest('[data-model]')){ if(player) player.pause(); speak(w.h); return; }
     if(e.target.closest('[data-play]')&&myUrl){ stopSpeak(); if(player) player.pause(); player=new Audio(myUrl); player.play().catch(()=>{}); }
   });
@@ -428,7 +429,7 @@ EX.cloze=(host,it,ctx)=>{
   const s=SBYID.get(it.sid), tok=s.t[it.idx];
   host.innerHTML=`${MODE_TAG('Lückentext')}<div class="prompt">Welches Wort fehlt?</div>
     <div id="csent">${rubyHtml(s,{blank:it.idx})}</div>
-    <div class="center" style="font-weight:700;margin:0 0 24px;color:var(--muted)">${esc(s.de)}</div>
+    <div class="center cde">${esc(s.de)}</div>
     <div class="opts">${it.opts.map((o,i)=>`<button class="opt" data-i="${i}"><span class="hz">${esc(o.h)}</span><span class="py">${pinyinHtml(o.p)}</span></button>`).join('')}</div>`;
   let locked=false;
   $$('.opt',host).forEach(b=>b.addEventListener('click',()=>{
@@ -447,7 +448,7 @@ EX.pairs=(host,it,ctx)=>{
   const ws=it.wids.map(id=>BYID.get(id));
   const left=shuffle(ws), right=shuffle(ws);
   host.innerHTML=`${MODE_TAG('Paare')}<div class="prompt">Finde die Paare</div>
-    <div class="pairs"><div class="pcol" id="pl">${left.map(w=>`<button class="pbtn" data-l="${w.id}"><span class="hz">${esc(w.h)}</span><span class="py">${pinyinHtml(wordPy(w))}</span></button>`).join('')}</div>
+    <div class="pairs" style="--n:${ws.length}"><div class="pcol" id="pl">${left.map(w=>`<button class="pbtn" data-l="${w.id}"><span class="hz">${esc(w.h)}</span><span class="py">${pinyinHtml(wordPy(w))}</span></button>`).join('')}</div>
     <div class="pcol" id="pr">${right.map(w=>`<button class="pbtn de" data-r="${w.id}">${esc(gloss(w))}</button>`).join('')}</div></div>`;
   let selL=null, mist=0, left_n=ws.length, busy=false;
   const done=()=>{ ctx.record(null); ctx.footerRaw(`<div class="fb"><b>${mist===0?'Alle Paare ohne Fehler':'Alle Paare gefunden'}</b><div>${mist} Fehlversuch${mist===1?'':'e'}</div></div><button class="btn good" data-fb="0">Weiter</button>`,e=>{ if(e.target.closest('[data-fb]')) ctx.next(); },'ok'); };
@@ -571,7 +572,7 @@ function distractorsFor(s,info,n){
   return sample(pool,n);
 }
 /* Deutsche Kacheln: Wörter des Satzes ohne Satzzeichen */
-function germanTokens(de){ return String(de).replace(/[.,!?;:„“"…]/g,' ').split(/\s+/).filter(Boolean); }
+function germanTokens(de){ return String(de).replace(/[.,!?;:„“"…()]/g,' ').split(/\s+/).filter(t=>/[\p{L}\p{N}]/u.test(t)); }
 function germanDistractors(s,info,n){
   const have=new Set(germanTokens(s.de).map(x=>x.toLowerCase()));
   const pool=[]; const seen=new Set();
@@ -606,8 +607,11 @@ function makeItems(type,scope,n){
     for(const s of pickWeighted(sentPool,n,sentWeight)){
       const cand=s.t.map((t,i)=>({t,i})).filter(x=>!x.t.punc&&BYID.has(x.t.w));
       if(!cand.length) continue; const pick=cand[Math.floor(Math.random()*cand.length)];
-      const have=new Set(s.t.map(t=>t.h)); const pool=info.words.filter(w=>!have.has(w.h)&&w.h!==pick.t.h);
-      const dis=sample(pool.length>=3?pool:WORDS.filter(w=>w.l===1&&!have.has(w.h)),3).map(w=>({h:w.h,p:wordPy(w)}));
+      /* Ablenker dürfen kein Zeichen mit dem Satz teilen (sonst steht z. B. 你好 als Option neben dem sichtbaren 你) */
+      const have=new Set(s.t.map(t=>t.h)); const chars=new Set([...s.t.map(t=>t.h).join('')]);
+      const okW=w=>!have.has(w.h)&&![...w.h].some(c=>chars.has(c));
+      const pool=info.words.filter(okW);
+      const dis=sample(pool.length>=3?pool:WORDS.filter(w=>w.l===1&&okW(w)),3).map(w=>({h:w.h,p:wordPy(w)}));
       out.push({type:'cloze',sid:s.id,idx:pick.i,opts:shuffle([{h:pick.t.h,p:pick.t.p},...dis])});
     }
   }
