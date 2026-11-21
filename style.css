@@ -482,3 +482,7 @@ html[data-tones=off] .t0,html[data-tones=off] .t1,html[data-tones=off] .t2,html[
 /* Satzzeichen-Kachel beim Satz bauen */
 .tok.pun{min-width:56px;padding-left:14px;padding-right:14px}
 .tok.pun .th{font-size:38px}
+
+/* Pegelanzeige beim Sprechen: zeigt, dass das Mikrofon dich hört */
+.lvl{height:10px;border-radius:5px;background:var(--line);margin:12px auto 0;width:min(280px,70%);overflow:hidden}
+.lvl i{display:block;height:100%;width:0;background:var(--good);transition:width .08s linear}

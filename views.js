@@ -291,6 +291,7 @@ function wordSheet(id){
 async function runDiag(out){
   const L=[]; const add=(t,cls='')=>{ L.push(`<div class="${cls}">${t}</div>`); out.innerHTML=L.join(''); };
   const standalone = navigator.standalone===true || matchMedia('(display-mode: standalone)').matches;
+  add(`Version der App: <b>${APP_VERSION}</b>`);
   add(`Start: <b>${standalone?'App vom Home-Bildschirm':'Safari-Tab'}</b>`);
   add(`Sichere Verbindung (https): <b>${isSecureContext?'ja':'nein'}</b>`);
   add(`Sprachausgabe: <b>${'speechSynthesis' in window?'vorhanden':'fehlt'}</b>, chinesische Stimmen: <b>${zhVoices.length}</b>${zhVoices[0]?' ('+esc(zhVoices[0].name)+')':''}`);

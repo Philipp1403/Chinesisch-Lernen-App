@@ -266,7 +266,9 @@ EX.speak=(host,it,ctx)=>{
     if(useAz){
       note.textContent='Ich höre zu … sprich den ganzen Satz, Ende wird erkannt';
       const refText=[...text].filter(isHan).join('');
-      const r=await azAssess(s,refText); busy=false; if(finished) return;
+      note.insertAdjacentHTML('afterend','<div class="lvl" aria-hidden="true"><i id="lvl"></i></div>');
+      const lv=$('#lvl',host);
+      const r=await azAssess(s,refText,{onLevel:p=>{ if(lv) lv.style.width=Math.min(100,Math.round(p*220))+'%'; }}); busy=false; if(finished) return;
       if(r.error){ const t=azErrorText(r.error,r.detail); idle(t?esc(t)+` <span class="small" style="opacity:.7">[${esc(r.dbg||r.detail||'')}]</span>`:undefined); return; }
       evaluate(null,r.res,r.audio); return;
     }

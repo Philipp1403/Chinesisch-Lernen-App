@@ -139,20 +139,23 @@ async function azDecode(blob){
 }
 function azPcm16k(mono,rate){
   const ratio=rate/16000, n=Math.floor(mono.length/ratio), out=new Int16Array(n); let peak=0;
+  for(let i=0;i<mono.length;i++){ const a=Math.abs(mono[i]); if(a>peak) peak=a; }
+  /* Aufnahme auf ca. 70 % Spitze anheben (höchstens 20-fach), wenn überhaupt Ton da ist */
+  const g=peak>=MIC_SIG?Math.min(20,0.7/peak):1;
   for(let i=0;i<n;i++){
     const a=Math.floor(i*ratio), b=Math.min(mono.length,Math.floor((i+1)*ratio)); let sum=0;
     for(let k=a;k<b;k++) sum+=mono[k];
-    const v=Math.max(-1,Math.min(1,sum/Math.max(1,b-a))); if(Math.abs(v)>peak) peak=Math.abs(v);
+    const v=Math.max(-1,Math.min(1,g*sum/Math.max(1,b-a)));
     out[i]=v<0?v*0x8000:v*0x7FFF;
   }
-  return {pcm:out,peak};
+  return {pcm:out,peak,gain:g};
 }
 
 /* Aufnahme + Bewertung. Antwort: {res, audio} oder {error, detail}
    Das Mikrofon wird hier selbst geöffnet und über einen eigenen AudioContext (16 kHz, 16 Bit) als Push-Stream an Azure geschickt.
    So bleibt der AudioContext unter eigener Kontrolle (iOS startet ihn sonst gern „angehalten“ und Azure hört nur Stille).
    Zusätzlich wird mitgeschnitten, damit man sich anhören kann. Am Ende wird alles geschlossen (Mikrofon-Anzeige geht aus). */
-async function azAssessLive(s,refText){
+async function azAssessLive(s,refText,opts={}){
   const AC=window.AudioContext||window.webkitAudioContext; let ac=null; const t0=Date.now();
   const closeAc=()=>{ try{ ac&&ac.close(); }catch(_){} };
   let SDK;
@@ -173,7 +176,7 @@ async function azAssessLive(s,refText){
       mr.start();
     }
   }catch(_){ mr=null; }
-  let src=null, proc=null, mute=null, peak=0, push=null;
+  let src=null, proc=null, mute=null, peak=0, push=null, gain=1, gmax=1, hold=0;
   const stopAll=()=>new Promise(res=>{
     let ended=false;
     const end=()=>{
@@ -194,7 +197,7 @@ async function azAssessLive(s,refText){
       try{ audio&&audio.close(); }catch(_){}
       stopAll().then(()=>{
         if(o&&(!o.error||o.error==='silent'||o.error==='no-speech')&&chunks.length) o.audio=new Blob(chunks,{type:(mr&&mr.mimeType)||mime||'audio/mp4'});
-        if(o){ o.peak=peak; o.dbg=`Web Audio ${acSt}, Spitze ${Math.round(peak*100)} %, Aufnahme ${chunks.reduce((a,c)=>a+c.size,0)} Byte, ${Date.now()-t0} ms`; }
+        if(o){ o.peak=peak; o.dbg=`Web Audio ${acSt}, Spitze ${Math.round(peak*100)} %, Verstärkung bis ${gmax.toFixed(1)}x, Aufnahme ${chunks.reduce((a,c)=>a+c.size,0)} Byte, ${Date.now()-t0} ms`; }
         resolve(o);
       });
     };
@@ -206,14 +209,23 @@ async function azAssessLive(s,refText){
       proc=ac.createScriptProcessor(4096,1,1);
       mute=ac.createGain(); mute.gain.value=0;
       const ratio=ac.sampleRate/16000;
+      /* Automatische Verstärkung: leise Stimmen werden angehoben (Ziel: lauteste Stellen bei ca. 40 %), höchstens 6-fach.
+         Unter 2,5 % Spitze wird nichts verstärkt (das ist Rauschen, sonst erkennt Azure das Ende der Aussage nicht). Runter sofort, hoch langsam. */
+      const TARGET=0.4, MAXG=6, GATE=0.025;
       proc.onaudioprocess=e=>{
         if(done) return;
-        const inp=e.inputBuffer.getChannelData(0); const n=Math.floor(inp.length/ratio); const out=new Int16Array(n);
+        const inp=e.inputBuffer.getChannelData(0); let cp=0;
+        for(let i=0;i<inp.length;i++){ const a=Math.abs(inp[i]); if(a>cp) cp=a; }
+        if(cp>peak) peak=cp;
+        if(opts.onLevel){ try{ opts.onLevel(cp); }catch(_){} }
+        hold=Math.max(cp,hold*0.9);
+        const want=hold<GATE?1:Math.min(MAXG,Math.max(1,TARGET/hold));
+        gain=want<gain?want:gain+(want-gain)*0.25; if(gain>gmax) gmax=gain;
+        const n=Math.floor(inp.length/ratio); const out=new Int16Array(n);
         for(let i=0;i<n;i++){
           const a=Math.floor(i*ratio), b=Math.min(inp.length,Math.floor((i+1)*ratio)); let sum=0;
           for(let k=a;k<b;k++) sum+=inp[k];
-          const v=Math.max(-1,Math.min(1,sum/Math.max(1,b-a)));
-          if(Math.abs(v)>peak) peak=Math.abs(v);
+          const v=Math.max(-1,Math.min(1,gain*sum/Math.max(1,b-a)));
           out[i]=v<0?v*0x8000:v*0x7FFF;
         }
         try{ push.write(out.buffer); }catch(_){}
@@ -272,12 +284,12 @@ async function azAssessPcm(s,refText,pcm){
 }
 /* Aufnahme + Bewertung mit Rückfall: Liefert Web Audio nur Stille, die Aufnahme (MediaRecorder) aber Ton, wird die Aufnahme bewertet.
    Das ist auf dem iPad der Weg, wenn der Mikrofonstrom in Web Audio ankommt, aber leer ist. */
-async function azAssess(s,refText){
-  const r=await azAssessLive(s,refText);
+async function azAssess(s,refText,opts){
+  const r=await azAssessLive(s,refText,opts);
   if((r.error==='silent'||r.error==='no-speech')&&r.audio){
     try{
       const d=await azDecode(r.audio), p=azPcm16k(d.data,d.rate);
-      r.dbg=(r.dbg||'')+`, Aufnahme gelesen: Spitze ${Math.round(p.peak*100)} %`;
+      r.dbg=(r.dbg||'')+`, Aufnahme gelesen: Spitze ${Math.round(p.peak*100)} %, angehoben ${p.gain.toFixed(1)}x`;
       if(p.peak>=MIC_SIG){ const r2=await azAssessPcm(s,refText,p.pcm); r2.dbg=r.dbg+(r2.error?', zweiter Versuch: '+r2.error:', zweiter Versuch ok'); if(!r2.error){ r2.audio=r.audio; r2.viaRecorder=true; } return r2; }
     }catch(e){ r.dbg=(r.dbg||'')+', Aufnahme nicht lesbar: '+String(e&&e.message||e); }
   }
