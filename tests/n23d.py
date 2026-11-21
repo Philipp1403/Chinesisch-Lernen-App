@@ -6,7 +6,9 @@ FAKE='''
   function mk(mode){
     return {
       SpeechConfig:{fromSubscription:(k,r)=>{calls.push(['cfg',k,r]);return {setProperty:(p,v)=>calls.push(['prop',p,v])}}},
-      AudioConfig:{fromStreamInput:st=>{calls.push(['stream',!!(st&&st.getTracks)]);return {close:()=>calls.push(['audioclose'])}}},
+      AudioInputStream:{createPushStream:f=>({write:b=>{},close:()=>calls.push(['pushclose'])})},
+      AudioStreamFormat:{getWaveFormatPCM:(a,b,c)=>[a,b,c]},
+      AudioConfig:{fromStreamInput:st=>{calls.push(['stream',!!(st&&st.write)]);return {close:()=>calls.push(['audioclose'])}}},
       PronunciationAssessmentGradingSystem:{HundredMark:1},PronunciationAssessmentGranularity:{Phoneme:3},
       PronunciationAssessmentConfig:function(ref,g,gr,m){calls.push(['pa',ref,m]);this.applyTo=()=>{}},
       ResultReason:{Canceled:0,RecognizedSpeech:3},PropertyId:{SpeechServiceResponse_JsonResult:9,SpeechServiceConnection_EndSilenceTimeoutMs:1,SpeechServiceConnection_InitialSilenceTimeoutMs:2},
@@ -14,7 +16,7 @@ FAKE='''
       SpeechRecognizer:function(){this.close=()=>{};this.recognizeOnceAsync=(ok,bad)=>setTimeout(()=>{
         if(window.__azmode==='401') return ok({reason:0,err:'Authentication error (401)'});
         if(window.__azmode==='silence') return ok({reason:1});
-        ok({reason:3,properties:{getProperty:()=>JSON.stringify(window.__azjson)}})},300)}
+        ok({reason:3,properties:{getProperty:()=>JSON.stringify(window.__azjson)}})},2200)}
     };
   }
   window.SpeechSDK=mk();

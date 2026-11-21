@@ -1,5 +1,5 @@
 from lib import *
-exec(open('n17.py').read().split("e=Env")[0].split("from lib import *")[1])  # FAKE tts
+exec(open(__import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)),'n17.py')).read().split("e=Env")[0].split("from lib import *")[1])  # FAKE tts
 e=Env(sw=False); pg=e.pg
 pg.add_init_script(FAKE)
 try:

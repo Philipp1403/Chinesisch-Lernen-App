@@ -106,6 +106,8 @@ function recognizeOnce(){
       rec.onnomatch=()=>fin({error:'no-speech'});
       rec.onend=()=>fin({error:'no-speech'});
       activeRec={stop:()=>{ try{ rec.stop(); }catch(_){} }, abort:()=>{ try{ rec.abort(); }catch(_){} fin({error:'aborted'}); }};
+      /* Läuft noch eine Sprachausgabe, bleibt auf dem iPad die Audiositzung im Wiedergabemodus und das Mikro hört nichts. Synchron stoppen, damit die Geste erhalten bleibt */
+      try{ stopSpeak(); }catch(_){}
       rec.start();
     }catch(err){ fin({error:'start-failed',message:String(err)}); }
   });

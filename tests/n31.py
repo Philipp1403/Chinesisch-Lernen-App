@@ -1,6 +1,6 @@
 import sys,math
 from lib import *
-FAKE=open('n17.py').read().split('FAKE="""')[1].split('"""')[0]
+FAKE=open(__import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)),'n17.py')).read().split('FAKE="""')[1].split('"""')[0]
 free=len(sys.argv)>1 and sys.argv[1]=='free'
 e=Env(w=1024,h=712,sw=False,dark=True); pg=e.pg; pg.add_init_script(FAKE)
 try:

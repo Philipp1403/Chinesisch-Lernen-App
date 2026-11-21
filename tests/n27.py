@@ -1,6 +1,6 @@
 import sys
 from lib import *
-FAKE=open('n17.py').read().split('FAKE="""')[1].split('"""')[0]
+FAKE=open(__import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)),'n17.py')).read().split('FAKE="""')[1].split('"""')[0]
 mode=sys.argv[1] if len(sys.argv)>1 else 'ipad'
 W,H=(1024,712) if mode=='ipad' else (390,844)
 e=Env(w=W,h=H,sw=False,mobile=(mode!='ipad')); pg=e.pg
