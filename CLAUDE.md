@@ -35,10 +35,25 @@ Live: https://philipp1403.github.io/Chinesisch-Lernen-App/ (GitHub Pages, Branch
 - Alle Kacheln in einer Übung müssen gleich groß sein. Pinyin groß genug, die Fläche gut nutzen, auf dem iPad darf man zum Zeichnen nicht scrollen müssen.
 
 ## Prüfen
-- Lint: `npx eslint` über alle JS-Dateien (Ziel: 0 Fehler, Warnungen sind bekannt).
-- Browser-Tests mit Playwright und Chrome gegen `python3 -m http.server 8765` im App-Ordner (Fake-Mikrofon: `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream`). Azure wird dabei durch eine Attrappe des SDK ersetzt. `window.__app` stellt Zustand und Startfunktionen für Tests bereit.
+- Lint: `tests/lint.sh` (installiert ESLint beim ersten Mal, bündelt alle JS-Dateien, Ziel: 0 Fehler, rund 60 Warnungen sind bekannt).
+- Browser-Test: `tests/run.sh n9` (Name des Tests ohne `.py`). Läuft in `tests/out`, dort liegen auch die Screenshots (nicht im Repo). Braucht Python 3, Playwright und Google Chrome unter `/usr/bin/google-chrome`. Die Tests laufen gegen eine Kopie der App ohne Passwortsperre (`tests/lib.py`, `testroot()`), weil im Repo die echte Sperre liegt.
+- Wichtige Tests: `n3` (Übungen, Sprechen, Mikro-Fehler), `n9` (Azure-Attrappe: Push-Stream, Score, Fehlertexte), `n17` (langsame Sprachausgabe, Reihenfolge der Silben), `n20` (Diagnose), `n21` (Paare, Lücke, Hören, Töne), `n22` (Karteikarten), `n31` (freies Zeichnen mit Score), `n18` (Screenshots aller Ansichten bei 820 px und 390 px).
+- Tests für die Passwortsperre (`n12` bis `n16` in der Sandbox) liegen nicht im Repo, sie brauchen die Passphrase.
+- `window.__app` stellt Zustand und Startfunktionen für Tests bereit (`startPractice`, `startLearn`, `startReview`, `LESSONS`, `SBYID`, `S`).
 - `lock-config.js` im Repo ist die echte Sperre (nur der Hash). Beim Arbeiten nie durch eine Entwicklerversion ersetzen oder überschreiben.
 - Ein echtes iPad kann niemand außer Philipp prüfen. Bei Geräteproblemen um Screenshot der Einstellungen, Diagnose bitten.
+
+## Arbeitsweise
+- Philipp schickt Probleme als Screenshots, oft nacheinander. Erst alle sammeln, dann beheben, dann ein Update pushen. Danach auf der Live-Seite prüfen, ob die neue `sw.js`-Version (und die geänderten Dateien) ausgeliefert werden.
+- Änderungen direkt auf `main` committen und pushen (GitHub Pages veröffentlicht sofort), nachdem Lint und die betroffenen Tests grün sind.
+- Nach jedem Push Philipp sagen: App auf dem iPad zweimal komplett schließen und neu öffnen.
+- Den Chrome-Tab mit der GitHub-Seite nicht mehr nötig. Kein ZIP mehr bauen.
+
+## Stand (21.11.2026)
+- Live ist `hanyu-v12`: neue Mikro-Pipeline (`micPrepare`, eigener AudioContext, Push-Stream zu Azure, Fehlercode `silent`), Zeitlimit in `speak()` leert die Warteschlange, Diagnose prüft zuerst das Mikro.
+- Problem davor (v11): Auf Philipps iPad lieferte das Mikro nur 5 % Pegel, Azure bekam Stille (Score 0, Omission), und das langsame Sprechen spielte nur die erste Silbe. Beides hing vermutlich an einer hängenden Sprachausgabe oder einem offen gebliebenen Audiokanal. Das ist eine Vermutung, nicht bestätigt.
+- Offen: Philipp muss v12 auf dem iPad testen (Einstellungen, Diagnose, Pegel über 6 %, dann Engine auf "Azure" stellen und "Azure testen"). Seine Engine stand bis dahin auf "Browser".
+- Falls das langsame Sprechen weiter hängt: Azure-Sprachausgabe mit SSML `prosody rate` bauen (0,5 Mio. Zeichen im Monat gratis laut Azure-Preisseite, braucht Internet, Rückfall auf die Gerätestimme offline). Vorher Philipp fragen.
 
 ## Offen
 - HSK 2: 200 Wörter in `words.json`, aber noch keine Lektionen, Sätze und Turmabschnitt. Nicht bauen, bevor Philipp das Freischalt-Konzept bestätigt hat.

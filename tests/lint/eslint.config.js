@@ -1,0 +1,3 @@
+const globals=require('globals');
+module.exports=[{files:['bundle.js'],languageOptions:{ecmaVersion:2022,sourceType:'script',globals:{...globals.browser,HanziWriter:'readonly'}},
+rules:{'no-undef':'error','no-unused-vars':['warn',{args:'none'}],'no-redeclare':'error','no-dupe-keys':'error','no-unreachable':'warn','no-empty':'off','no-cond-assign':'warn','eqeqeq':'off','no-self-assign':'warn','no-shadow-restricted-names':'error','no-func-assign':'error','no-const-assign':'error','no-dupe-else-if':'error','no-loss-of-precision':'warn','no-unsafe-finally':'error','require-atomic-updates':'off','no-prototype-builtins':'off','use-isnan':'error','valid-typeof':'error','no-fallthrough':'warn','no-useless-escape':'off'}}];
