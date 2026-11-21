@@ -124,17 +124,17 @@ function showDone(){
 const MODE_TAG=t=>`<div class="tag-mode">${t}</div>`;
 const TYPE_INFO={
   choose:{name:'Wörter auswählen',desc:'Hören, lesen, zuordnen',icon:'choose'},
-  build:{name:'Satz bauen',desc:'Chinesischen Satz aus Kacheln bilden',icon:'build'},
-  trans:{name:'Übersetzen',desc:'Chinesischen Satz aus deutschen Wörtern bilden',icon:'build'},
-  tones:{name:'Töne-Training',desc:'Ton hören und bestimmen',icon:'dictate'},
-  cloze:{name:'Lückentext',desc:'Fehlendes Wort im Satz wählen',icon:'choose'},
-  pairs:{name:'Paare zuordnen',desc:'Chinesisch und Deutsch verbinden',icon:'mixed'},
-  listensent:{name:'Hören und verstehen',desc:'Satz hören, Bedeutung wählen',icon:'dictate'},
-  speak:{name:'Nachsprechen',desc:'Satz sprechen, Bewertung erhalten',icon:'mic'},
-  draw:{name:'Zeichen zeichnen',desc:'Zeichen mit der richtigen Strichfolge',icon:'draw'},
-  dictate:{name:'Hören und schreiben',desc:'Satz hören, aus Kacheln schreiben',icon:'dictate'},
-  wcard:{name:'Karteikarten frei',desc:'Sprechen und zeichnen',icon:'mic'},
-  wdrill:{name:'Schreibtraining',desc:'Zeichen mehrfach hintereinander üben',icon:'draw'},
+  build:{name:'Satz bauen',desc:'Satz aus Kacheln bilden',icon:'build'},
+  trans:{name:'Übersetzen',desc:'Satz auf Deutsch bilden',icon:'translate'},
+  tones:{name:'Töne-Training',desc:'Ton hören und bestimmen',icon:'tone'},
+  cloze:{name:'Lückentext',desc:'Lücke im Satz füllen',icon:'blank'},
+  pairs:{name:'Paare zuordnen',desc:'Wörter verbinden',icon:'link'},
+  listensent:{name:'Hören und verstehen',desc:'Hören, Bedeutung wählen',icon:'ear'},
+  speak:{name:'Nachsprechen',desc:'Sprechen, Bewertung erhalten',icon:'mic'},
+  draw:{name:'Zeichen zeichnen',desc:'Zeichen mit Strichfolge',icon:'draw'},
+  dictate:{name:'Hören und schreiben',desc:'Hören, Kacheln ordnen',icon:'dictate'},
+  wcard:{name:'Karteikarten frei',desc:'Sprechen und zeichnen',icon:'cards'},
+  wdrill:{name:'Schreibtraining',desc:'Zeichen mehrfach üben',icon:'grid'},
   mixed:{name:'Gemischte Runde',desc:'Von allem etwas',icon:'mixed'},
 };
 
@@ -226,7 +226,7 @@ function tileBuilder(host,it,ctx,mode){
     else ctx.finish({ok:false,title:'Die richtige Lösung:',html:solution()});
   }
   function giveUp(){ locked=true; ctx.finish({ok:false,title:'Die richtige Lösung:',html:solution()}); }
-  ctx.footer([{label:'Weiß nicht',cls:'quiet',onClick:giveUp},{label:'Prüfen',cls:'primary grow',disabled:true,onClick:check}]);
+  ctx.footer([{label:'Weiß nicht',cls:'',onClick:giveUp},{label:'Prüfen',cls:'primary grow',disabled:true,onClick:check}]);
   draw();
 }
 EX.build=(host,it,ctx)=>tileBuilder(host,it,ctx,'build');
@@ -472,7 +472,7 @@ EX.listensent=(host,it,ctx)=>{
   const s=SBYID.get(it.sid);
   host.innerHTML=`${MODE_TAG('Hören und verstehen')}<div class="prompt">Was bedeutet der Satz?</div>
     <div class="row" style="justify-content:center;gap:14px;margin:6px 0 14px"><button class="ibtn xl fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>
-    ${listenSent(s)}
+    <div id="lsent">${listenSent(s)}</div>
     <div class="opts long">${it.opts.map((o,i)=>`<button class="opt" data-i="${i}">${esc(o)}</button>`).join('')}</div>`;
   bindAudio(host,sentenceText(s),sentParts(s));
   autoSpeak(sentenceText(s));
@@ -482,7 +482,9 @@ EX.listensent=(host,it,ctx)=>{
     const ok=it.opts[+b.dataset.i]===s.de;
     $$('.opt',host).forEach(x=>{ x.disabled=true; if(it.opts[+x.dataset.i]===s.de) x.classList.add('right'); });
     if(!ok) b.classList.add('wrong');
-    ctx.finish({ok,title:ok?'Richtig!':'Das heißt:',html:`${rubyHtml(s,{sm:true})}<div style="font-weight:700">${esc(s.de)}</div>`});
+    /* Der chinesische Satz steht oben über den Antworten (bei ausgeschaltetem Text erst jetzt), die Leiste unten bleibt klein */
+    if(!state.settings.showText) $('#lsent',host).innerHTML=`<div class="listentext">${rubyHtml(s,{sm:true})}</div>`;
+    ctx.finish({ok,title:ok?'Richtig!':'Das heißt:',html:`<div style="font-weight:700">${esc(s.de)}</div>`});
   }));
 };
 

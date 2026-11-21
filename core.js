@@ -5,7 +5,7 @@ const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isHan = ch => /[㐀-鿿]/.test(ch);
 const DAY = 86400000;
-const APP_VERSION = 'v20'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
+const APP_VERSION = 'v21'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function dayStart(plus=0){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+plus); return d.getTime(); }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -27,6 +27,12 @@ const ICON = {
   draw: svg('<path d="M4 20l1-4.2L16.6 4.2a2.1 2.1 0 0 1 3 3L8 18.8z"/><path d="M14.5 6.3l3.2 3.2"/>'),
   dictate: svg('<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13.5" width="4.2" height="6.5" rx="2" fill="currentColor"/><rect x="16.8" y="13.5" width="4.2" height="6.5" rx="2" fill="currentColor"/>'),
   mixed: svg('<path d="M3 7h3.5c5 0 5 10 10 10H21M3 17h3.5c1.7 0 2.9-.9 3.8-2.1M13.7 9.1C14.6 7.9 15.5 7 17 7h4"/><path d="m18.5 4.5 2.5 2.5-2.5 2.5M18.5 14.5l2.5 2.5-2.5 2.5"/>'),
+  translate: svg('<path d="M4 8h13M13.5 4.5 17 8l-3.5 3.5"/><path d="M20 16H7M10.5 12.5 7 16l3.5 3.5"/>'),
+  tone: svg('<path d="M3 12c1.5-6 3-6 4.5 0s3 6 4.5 0 3-6 4.5 0 3 6 4.5 0"/>'),
+  blank: svg('<path d="M3 6h18"/><path d="M3 18h18"/><path d="M3 12h4.5M16.5 12H21"/><rect x="9.5" y="8.5" width="5" height="7" rx="1.3" stroke-dasharray="2 2"/>'),
+  link: svg('<circle cx="6" cy="7" r="2.6"/><circle cx="18" cy="17" r="2.6"/><circle cx="6" cy="17" r="2.6"/><circle cx="18" cy="7" r="2.6"/><path d="M8.4 8.2 15.6 15.8M8.4 15.8 15.6 8.2"/>'),
+  ear: svg('<path d="M7 9.5a5 5 0 0 1 10 0c0 2.6-2.2 3.4-3.2 5.1-.9 1.6-.4 3.9-2.8 4.4-2 .4-3.5-1-3.5-2.6"/><path d="M10 9.5a2 2 0 0 1 4 0"/>'),
+  grid: svg('<rect x="4" y="4" width="16" height="16" rx="2.6"/><path d="M12 4v16M4 12h16" stroke-dasharray="2 2.6"/>'),
   check: svg('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
   back: svg('<path d="M15 5l-7 7 7 7"/>'),
   play: svg('<path d="M7 4.5v15l12-7.5z" fill="currentColor"/>'),

@@ -486,3 +486,66 @@ html[data-tones=off] .t0,html[data-tones=off] .t1,html[data-tones=off] .t2,html[
 /* Pegelanzeige beim Sprechen: zeigt, dass das Mikrofon dich hört */
 .lvl{height:10px;border-radius:5px;background:var(--line);margin:12px auto 0;width:min(280px,70%);overflow:hidden}
 .lvl i{display:block;height:100%;width:0;background:var(--good);transition:width .08s linear}
+
+/* ===== v21: Feedback-Liste (Leiste, Kacheln, Pinyin, Üben-Übersicht, Einrichtung) ===== */
+/* Rückmeldeleiste: kompakter, Knopf größer und näher am Text */
+.sfoot.ok,.sfoot.no{padding-top:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.sfoot.ok .in,.sfoot.no .in{max-width:820px;gap:22px}
+.sfoot.ok .in>.btn,.sfoot.no .in>.btn{min-width:150px;min-height:62px;font-size:20px;flex:none}
+.sfoot .fb b{font-size:clamp(20px,2.6vw,26px);margin-bottom:2px}
+.sfoot .fb .hz{font-size:clamp(26px,3.6vw,34px)}
+.sfoot .fb div{font-size:clamp(17px,2.4vw,22px)}
+.sfoot .ruby{margin:0 6px 0 0}
+.sfoot .ruby .r-hz{font-size:clamp(28px,4vw,40px)}
+.sfoot .ruby .r-py{font-size:clamp(16px,2.3vw,23px)}
+/* Pinyin größer, Kacheln nutzen die Fläche */
+.sentence.sm .r-py{font-size:clamp(15px,2vw,20px)}
+.sentence.sm .r-hz{font-size:clamp(26px,3.6vw,36px)}
+.wrow .sentence.sm .r-py{font-size:clamp(16px,2.5vw,23px)}
+.wrow .sentence.sm .r-hz{font-size:clamp(26px,3.4vw,34px)}
+.ruby .r-py{font-size:clamp(17px,2.9vw,27px)}
+@media (min-width:700px){
+  .tok{min-width:clamp(96px,10vw,136px);min-height:clamp(110px,17vh,200px);padding:10px 28px 8px;border-radius:24px}
+  .tok .th{font-size:clamp(48px,7vw,86px)}
+  .tok .tp{font-size:clamp(20px,2.8vw,34px);margin-bottom:4px}
+  .tok.de{min-width:90px;min-height:clamp(78px,11vh,108px)}
+  .tok.de .th{font-size:clamp(26px,3vw,38px)}
+  .tok.pun{min-width:64px}
+  .answer{min-height:clamp(160px,28vh,340px)}
+  .bank{gap:18px}
+  .opt{min-height:clamp(82px,14vh,140px)}
+  .opt .hz{font-size:clamp(38px,6vw,64px)}
+  .opt .py{font-size:clamp(17px,2.4vw,26px)}
+  .opts.long .opt{min-height:clamp(60px,8vh,84px);font-size:clamp(18px,2.4vw,26px)}
+}
+/* Lücke: Kasten in Zeichenhöhe statt Strich am Boden */
+.ruby.blank .r-hz{min-width:clamp(66px,10vw,112px);border:4px dashed var(--p);border-radius:16px;background:var(--p-soft);color:transparent;line-height:1.1;margin-top:2px}
+.ruby.blank .r-py::before{content:'?';color:var(--p);font-weight:900}
+/* Üben-Übersicht: gleich hohe Kacheln, kurze Texte, Titel brechen nicht am Rand */
+.exgrid{grid-auto-rows:1fr}
+.excard b{font-size:clamp(17px,1.9vw,21px)}
+.excard span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.excard>div:last-child{min-width:0}
+@media (min-width:700px){
+  /* Symbol oben, Text darunter über die volle Kachelbreite: nichts bricht mehr mitten im Wort */
+  .excard{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:14px;padding:18px 20px 20px}
+  .excard>div:last-child{width:100%}
+}
+/* Auswahl deutlich: gewählt = volle Farbe, Häkchen */
+.choice{position:relative}
+.choice[aria-pressed=true]{background:var(--p);border-color:var(--p-d);color:var(--on-p)}
+.choice[aria-pressed=true] span{color:var(--on-p);opacity:.85}
+.choice[aria-pressed=true]::after{content:'✓';position:absolute;top:12px;right:16px;font-weight:900;font-size:20px}
+.chip[aria-pressed=true]{background:var(--p);border-color:var(--p-d);color:var(--on-p)}
+/* Einrichtungsfenster: Inhalt scrollt, Knopf bleibt fest unten */
+.sheet.fixfoot{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0;height:min(90dvh,860px);max-height:none}
+.sheet.fixfoot .sheetscroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:18px}
+.sheet.fixfoot .sheetfoot{flex:none;padding:12px 0 calc(16px + env(safe-area-inset-bottom));border-top:2px solid var(--line);background:var(--bg)}
+/* Niedrige Fenster (iPad quer): Kopf von Hören und verstehen kompakter, damit alle Antworten über der Leiste sitzen */
+@media (min-width:700px) and (max-height:900px){
+  .ibtn.xl{width:74px;height:74px}
+  .ibtn.xl svg{width:34px;height:34px}
+  .opts.long{gap:10px}
+  .opts.long .opt{min-height:56px}
+  .listentext{padding-top:6px;padding-bottom:6px}
+}

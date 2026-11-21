@@ -119,7 +119,7 @@ function writeSetup(preScope){
   const html=()=>{
     const words=drillWords([...sel]);
     const prev=words.slice(0,14).map(w=>w.h).join(' ');
-    return `<h2 style="margin-bottom:6px">Zeichen schreiben üben</h2>
+    return `<div class="sheetscroll"><h2 style="margin-bottom:6px">Zeichen schreiben üben</h2>
     <p class="muted small" style="font-weight:700;margin-bottom:20px">Wähle ein Thema. Jedes Wort schreibst du mehrmals hintereinander.</p>
     <div class="fieldlabel">Thema</div>
     <div class="row" style="margin-bottom:6px"><button class="chip" data-all aria-pressed="${sel.size===0}">Alle Lektionen</button>${LESSONS.map(l=>`<button class="chip" data-l="${l.id}" aria-pressed="${sel.has(l.id)}">${esc(l.title)}</button>`).join('')}</div>
@@ -141,9 +141,10 @@ function writeSetup(preScope){
     <div class="fieldlabel">Vorlage im Hintergrund</div>
     <div class="row" style="margin-bottom:8px">${chip('help','fade','Nach und nach ausblenden',c.help)}${chip('help','on','Immer',c.help)}${chip('help','off','Nie',c.help)}</div>
     <p class="muted small" style="font-weight:600;margin-bottom:22px">Beim Ausblenden hast du in den ersten Wiederholungen eine blasse Vorlage, danach schreibst du aus dem Gedächtnis.</p>
-    <div class="stickyfoot"><button class="btn primary block big" data-go ${words.length?'':'disabled'}>Los geht's</button></div>`;
+    </div><div class="sheetfoot"><button class="btn primary block big" data-go ${words.length?'':'disabled'}>Los geht's</button></div>`;
   };
   openSheet(html(),sh=>{
+    sh.classList.add('fixfoot');
     sh.onclick=e=>{
       let redraw=false;
       if(e.target.closest('[data-all]')){ sel.clear(); redraw=true; }
@@ -157,7 +158,7 @@ function writeSetup(preScope){
         c.scope=[...sel]; state.ui.wset={scope:c.scope,demo:c.demo,reps:c.reps,count:c.count,help:c.help,mode:c.mode}; save();
         closeSheet(); startWriteDrill({scope:c.scope,demo:c.demo,reps:c.reps,count:c.count,help:c.help,mode:c.mode}); return;
       }
-      if(redraw){ const y=sh.scrollTop; sh.innerHTML=`<div class="grab"></div>`+html(); sh.scrollTop=y; }
+      if(redraw){ const sc=$('.sheetscroll',sh), y=sc?sc.scrollTop:0; sh.innerHTML=`<div class="grab"></div>`+html(); const n=$('.sheetscroll',sh); if(n) n.scrollTop=y; }
     };
   });
 }
