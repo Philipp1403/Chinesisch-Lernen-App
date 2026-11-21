@@ -187,11 +187,13 @@ EX.choose=(host,it,ctx)=>{
 /* --- Kacheln (Satz bauen / Hören und schreiben) --- */
 function tileBuilder(host,it,ctx,mode){
   const s=SBYID.get(it.sid); const trans=mode==='trans';
-  const target=trans?germanTokens(s.de).map(h=>({h,p:'',w:null})):s.t.filter(t=>!t.punc);
-  const bank=shuffle([...target.map((t,i)=>({h:t.h,p:t.p,w:t.w})),...it.dis.map(t=>({h:t.h,p:t.p||'',w:t.w}))]).map((t,i)=>({...t,k:i}));
+  /* Chinesisch: Satzzeichen im Satz (Komma, Aufzählungskomma) sind eigene Kacheln, nach chinesischer Regel gesetzt. Das Schlusszeichen entfällt. */
+  const target=trans?germanTokens(s.de).map(h=>({h,p:'',w:null})):s.t.filter((t,i)=>!t.punc||i<s.t.length-1);
+  const bank=shuffle([...target.map((t,i)=>({h:t.h,p:t.p,w:t.w,punc:!!t.punc})),...it.dis.map(t=>({h:t.h,p:t.p||'',w:t.w}))]).map((t,i)=>({...t,k:i}));
   const ans=[];
   const tok=(t,cls='',attr='')=>trans
     ? `<button class="tok de ${cls}" ${attr}><span class="th">${esc(t.h)}</span></button>`
+    : t.punc ? `<button class="tok pun ${cls}" ${attr}><span class="tp">&nbsp;</span><span class="th">${esc(t.h)}</span></button>`
     : `<button class="tok ${cls}" ${attr}><span class="tp">${pinyinHtml(t.p)}</span><span class="th">${esc(t.h)}</span></button>`;
   let head;
   if(trans) head=`${MODE_TAG('Übersetzen')}<div class="prompt">Was heißt das auf Deutsch?</div>${rubyHtml(s)}<div class="row" style="justify-content:center;gap:12px;margin:6px 0 24px"><button class="ibtn sm fill" data-au="n" aria-label="Abspielen">${ICON.speaker}</button><button class="slowbtn" data-au="s">${ICON.slow}Langsam</button></div>`;
@@ -211,7 +213,7 @@ function tileBuilder(host,it,ctx,mode){
   host.addEventListener('click',e=>{
     if(locked) return;
     const b=e.target.closest('[data-b]'), a=e.target.closest('[data-a]');
-    if(b){ const k=+b.dataset.b; ans.push(k); if(!trans) speak(bank[k].h); draw(); }
+    if(b){ const k=+b.dataset.b; ans.push(k); if(!trans&&!bank[k].punc) speak(bank[k].h); draw(); }
     else if(a){ ans.splice(+a.dataset.a,1); draw(); }
   });
   const solution=()=>trans?`<div style="font-weight:800;font-size:17px">${esc(s.de)}</div>`:`${rubyHtml(s,{sm:true})}<div style="font-weight:700">${esc(s.de)}</div>`;
@@ -510,10 +512,10 @@ EX.wdrill=(host,it,ctx)=>{
     const outline = it.help==='on' ? true : it.help==='off' ? false : r<Math.ceil(N*0.4);
     dots(`Wiederholung ${r+1} von ${N}${it.help==='fade'?(outline?' · mit Vorlage':' · ohne Vorlage'):''}`);
     q.innerHTML=''; const sub=document.createElement('div'); q.appendChild(sub);
-    ctx.footer([{label:'Wort überspringen',cls:'quiet grow',onClick:()=>ctx.complete(null)}]);
-    writeQuiz(sub,w,{outline,onFinish:({mistakes})=>{
+    ctx.footer([{label:'Wort überspringen',cls:'quiet grow',onClick:()=>ctx.complete(null)}],'slim');
+    writeQuiz(sub,w,{outline,free:it.free,fit:true,onFinish:({mistakes})=>{
       mist+=mistakes; r++; setBar(); dots(r>=N?'Geschafft':`Wiederholung ${r} von ${N} erledigt`);
-      ctx.footer([r>=N?{label:'Fertig',cls:'primary grow big',onClick:done}:{label:`Wiederholung ${r+1} von ${N}`,cls:'primary grow big',onClick:startRep}]);
+      ctx.footer([r>=N?{label:'Fertig',cls:'primary grow big',onClick:done}:{label:`Wiederholung ${r+1} von ${N}`,cls:'primary grow big',onClick:startRep}],'slim');
     }}).then(z=>{ if(dead) z.destroy(); else quiz=z; }).catch(()=>{ q.innerHTML='<p class="muted small center">Strichdaten konnten nicht geladen werden.</p>'; ctx.footer([{label:'Weiter',cls:'primary grow',onClick:()=>ctx.complete(null)}]); });
   }
   function done(){
@@ -661,7 +663,7 @@ function startWriteDrill(cfg){
   const words=drillWords(cfg.scope); if(!words.length) return;
   const per=cfg.count>0?Math.min(cfg.count,words.length):words.length;
   let off=0;
-  const gen=()=>{ const out=[]; for(let i=0;i<per;i++){ const w=words[(off+i)%words.length]; out.push({type:'wdrill',wid:w.id,reps:cfg.reps,demo:cfg.demo,help:cfg.help}); } off=(off+per)%words.length; return out; };
+  const gen=()=>{ const out=[]; for(let i=0;i<per;i++){ const w=words[(off+i)%words.length]; out.push({type:'wdrill',wid:w.id,reps:cfg.reps,demo:cfg.demo,help:cfg.help,free:cfg.mode==='free'}); } off=(off+per)%words.length; return out; };
   runSession({title:'Schreibtraining',items:gen(),kind:'practice',regen:per<words.length?gen:null,onExit:()=>renderView()});
 }
 /* Lektionstest: jedes Wort der Lektion einmal, nur Wörter, ohne Wiederholungsrunde */

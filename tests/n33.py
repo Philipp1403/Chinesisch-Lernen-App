@@ -12,9 +12,9 @@ try:
     word=pg.evaluate("__app.BYID.get(__app.S.items[__app.S.idx||0].wid).h"); n=len([c for c in word])
     print('word',word,'meaning visible',pg.evaluate("!!document.querySelector('.meaning')"))
     for ci in range(n):
-        info=pg.evaluate("""(()=>{const box=document.querySelector('.wbox'); const g=box.querySelector('svg:not(.freelayer) g[transform]');
+        info=pg.evaluate("""(ci=>{const wb=document.querySelector('.wbox'); const box=wb.querySelectorAll('.wcell')[ci]||wb; const g=box.querySelector('svg:not(.freelayer) g[transform]');
           const m=/translate\\(([-\\d.]+),\\s*([-\\d.]+)\\)\\s*scale\\(([-\\d.]+),\\s*([-\\d.]+)\\)/.exec(g.getAttribute('transform'));
-          const r=box.getBoundingClientRect(); return {tx:+m[1],ty:+m[2],sx:+m[3],sy:+m[4],l:r.left+box.clientLeft,t:r.top+box.clientTop}})()""")
+          const r=box.getBoundingClientRect(); return {tx:+m[1],ty:+m[2],sx:+m[3],sy:+m[4],l:r.left+box.clientLeft,t:r.top+box.clientTop}})""",ci)
         meds=pg.evaluate(f"CHARS[[...__app.BYID.get(__app.S.items[__app.S.idx||0].wid).h][{ci}]].medians")
         if ci==0: e.shot(f'g_{mode}_start.png')
         for med in meds:

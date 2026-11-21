@@ -112,7 +112,7 @@ function scopeSheet(){
 
 /* ============ Schreibtraining einrichten ============ */
 function writeSetup(preScope){
-  const d={demo:true,reps:10,count:5,help:'fade'};
+  const d={demo:true,reps:10,count:5,help:'fade',mode:state.settings.freeDraw?'free':'trace'};
   const c=Object.assign(d,state.ui.wset||{});
   const sel=new Set(preScope&&preScope.length?preScope:(c.scope||[]));
   const chip=(k,v,label,cur)=>`<button class="chip" data-${k}="${v}" aria-pressed="${String(cur)===String(v)}">${label}</button>`;
@@ -133,6 +133,11 @@ function writeSetup(preScope){
     <div class="row" style="margin-bottom:22px">${[3,5,10,15].map(n=>chip('reps',n,n+'×',c.reps)).join('')}</div>
     <div class="fieldlabel">Wörter pro Runde</div>
     <div class="row" style="margin-bottom:22px">${[3,5,10].map(n=>chip('count',n,n,c.count)).join('')}${chip('count',0,'Alle',c.count)}</div>
+    <div class="fieldlabel">Wie zeichnest du?</div>
+    <div class="choice2" style="margin-bottom:22px">
+      <button class="choice" data-mode="trace" aria-pressed="${c.mode==='trace'}"><b>Nachzeichnen</b><span>Du zeichnest der Vorlage nach, deine Striche rasten in die richtige Form ein</span></button>
+      <button class="choice" data-mode="free" aria-pressed="${c.mode==='free'}"><b>Frei zeichnen</b><span>Deine Striche bleiben so, wie du sie malst. Dafür musst du mehr auf die Form achten. Am Ende ein Score</span></button>
+    </div>
     <div class="fieldlabel">Vorlage im Hintergrund</div>
     <div class="row" style="margin-bottom:8px">${chip('help','fade','Nach und nach ausblenden',c.help)}${chip('help','on','Immer',c.help)}${chip('help','off','Nie',c.help)}</div>
     <p class="muted small" style="font-weight:600;margin-bottom:22px">Beim Ausblenden hast du in den ersten Wiederholungen eine blasse Vorlage, danach schreibst du aus dem Gedächtnis.</p>
@@ -147,9 +152,10 @@ function writeSetup(preScope){
       const rp=e.target.closest('[data-reps]'); if(rp){ c.reps=+rp.dataset.reps; redraw=true; }
       const ct=e.target.closest('[data-count]'); if(ct){ c.count=+ct.dataset.count; redraw=true; }
       const hp=e.target.closest('[data-help]'); if(hp){ c.help=hp.dataset.help; redraw=true; }
+      const md=e.target.closest('[data-mode]'); if(md){ c.mode=md.dataset.mode; redraw=true; }
       if(e.target.closest('[data-go]')){
-        c.scope=[...sel]; state.ui.wset={scope:c.scope,demo:c.demo,reps:c.reps,count:c.count,help:c.help}; save();
-        closeSheet(); startWriteDrill({scope:c.scope,demo:c.demo,reps:c.reps,count:c.count,help:c.help}); return;
+        c.scope=[...sel]; state.ui.wset={scope:c.scope,demo:c.demo,reps:c.reps,count:c.count,help:c.help,mode:c.mode}; save();
+        closeSheet(); startWriteDrill({scope:c.scope,demo:c.demo,reps:c.reps,count:c.count,help:c.help,mode:c.mode}); return;
       }
       if(redraw){ const y=sh.scrollTop; sh.innerHTML=`<div class="grab"></div>`+html(); sh.scrollTop=y; }
     };
