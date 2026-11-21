@@ -48,7 +48,6 @@ Live: https://philipp1403.github.io/Chinesisch-Lernen-App/ (GitHub Pages, Branch
 - Änderungen direkt auf `main` committen und pushen (GitHub Pages veröffentlicht sofort), nachdem Lint und die betroffenen Tests grün sind.
 - Nach jedem Push Philipp sagen: App auf dem iPad zweimal komplett schließen und neu öffnen.
 - Den Chrome-Tab mit der GitHub-Seite nicht mehr nötig. Kein ZIP mehr bauen.
-- Skills in `.claude/skills/`: `tdd` (Tests bei Änderungen, Seams vorher mit Philipp abstimmen), `code-review` (Review gegen `main`), `diagnosing-bugs` (Fehlersuche mit Feedback-Schleife) und `ponytail` (kleinste Änderung). `ponytail` immer in der Stufe `lite` nutzen. Es gibt keinen Issue-Tracker, `code-review` fragt dann nach der Spezifikation.
 
 ## Stand (21.11.2026)
 - Live ist `hanyu-v12`: neue Mikro-Pipeline (`micPrepare`, eigener AudioContext, Push-Stream zu Azure, Fehlercode `silent`), Zeitlimit in `speak()` leert die Warteschlange, Diagnose prüft zuerst das Mikro.
