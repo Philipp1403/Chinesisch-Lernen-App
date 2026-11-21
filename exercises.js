@@ -6,8 +6,7 @@ function rubyHtml(s,{marks=null,sm=false,blank=-1}={}){
   for(const tok of s.t){
     ti++;
     if(ti===blank){ out+=`<span class="ruby blank"><span class="r-py"></span><span class="r-hz">&nbsp;</span></span>`; continue; }
-    if(tok.punc){ if(tok.h==='。') continue;   /* der Schlusspunkt wird nicht angezeigt */
-      out+=`<span class="ruby punc"><span class="r-py"></span><span class="r-hz">${esc(tok.h)}</span></span>`; continue; }
+    if(tok.punc) continue;   /* im Chinesischen werden keine Satzzeichen angezeigt */
     if(marks){
       const chars=[...tok.h], syl=charSylls(tok.h,tok.p);
       chars.forEach((c,i)=>{
@@ -187,8 +186,8 @@ EX.choose=(host,it,ctx)=>{
 /* --- Kacheln (Satz bauen / Hören und schreiben) --- */
 function tileBuilder(host,it,ctx,mode){
   const s=SBYID.get(it.sid); const trans=mode==='trans';
-  /* Chinesisch: Satzzeichen im Satz (Komma, Aufzählungskomma) sind eigene Kacheln, nach chinesischer Regel gesetzt. Das Schlusszeichen entfällt. */
-  const target=trans?germanTokens(s.de).map(h=>({h,p:'',w:null})):s.t.filter((t,i)=>!t.punc||i<s.t.length-1);
+  /* Chinesisch: ohne Satzzeichen, nur Wörter als Kacheln */
+  const target=trans?germanTokens(s.de).map(h=>({h,p:'',w:null})):s.t.filter(t=>!t.punc);
   const bank=shuffle([...target.map((t,i)=>({h:t.h,p:t.p,w:t.w,punc:!!t.punc})),...it.dis.map(t=>({h:t.h,p:t.p||'',w:t.w}))]).map((t,i)=>({...t,k:i}));
   const ans=[];
   const tok=(t,cls='',attr='')=>trans
