@@ -37,7 +37,7 @@ Live: https://philipp1403.github.io/Chinesisch-Lernen-App/ (GitHub Pages, Branch
 ## Prüfen
 - Lint: `npx eslint` über alle JS-Dateien (Ziel: 0 Fehler, Warnungen sind bekannt).
 - Browser-Tests mit Playwright und Chrome gegen `python3 -m http.server 8765` im App-Ordner (Fake-Mikrofon: `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream`). Azure wird dabei durch eine Attrappe des SDK ersetzt. `window.__app` stellt Zustand und Startfunktionen für Tests bereit.
-- Release-ZIP: `lock-config.js` gegen die echte Sperre tauschen (liegt nicht im Repo).
+- `lock-config.js` im Repo ist die echte Sperre (nur der Hash). Beim Arbeiten nie durch eine Entwicklerversion ersetzen oder überschreiben.
 - Ein echtes iPad kann niemand außer Philipp prüfen. Bei Geräteproblemen um Screenshot der Einstellungen, Diagnose bitten.
 
 ## Offen
