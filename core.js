@@ -5,7 +5,7 @@ const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isHan = ch => /[㐀-鿿]/.test(ch);
 const DAY = 86400000;
-const APP_VERSION = 'v21'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
+const APP_VERSION = 'v22'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function dayStart(plus=0){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+plus); return d.getTime(); }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -64,6 +64,8 @@ function hanziHtml(h, py){
 let WORDS=[], BYID=new Map(), CHARLEVEL={}, CHARS={}, chunkLoaded={};
 let LESSONS=[], LBYID=new Map(), SENTS=[], SBYID=new Map(), EXAMPLE=new Map();
 const LESSON_ICON={gruss:'你好',ich:'我',menschen:'人',familie:'家',zahlen:'三',mengen:'个',datum:'日',uhrzeit:'时',essen:'吃',trinken:'喝',einkaufen:'买',dies:'这',ort:'里',schule:'学',chinesisch:'字',arbeit:'工',freizeit:'玩',unterwegs:'车',gesundheit:'雨',wuensche:'爱',verben:'做',eigenschaften:'大',kleine:'也',fragen:'吗'};
+/* Deutsche Sätze ohne Satzzeichen (Komma, Punkt, Frage-, Ausrufezeichen, Gedankenstrich). Der Punkt nach einer Ziffer (Ordnungszahl wie "2. Oktober") bleibt. */
+function deNoPunc(t){ return String(t).replace(/(\d)\./g,'$1\u0001').replace(/[.,;:!?…„“"()–—]/g,' ').replace(/\u0001/g,'.').replace(/\s+/g,' ').trim(); }
 async function loadData(){
   const [r1,r2]=await Promise.all([fetch('data/words.json'),fetch('data/hsk1.json')]);
   if(!r1.ok) throw new Error('words.json '+r1.status);
@@ -78,7 +80,7 @@ async function loadData(){
   for(const w of WORDS) if(w.deFull){ const k=clean(w.deFull); if(k) cnt.set(k,(cnt.get(k)||0)+1); }
   for(const w of WORDS) if(w.deFull){ const c=clean(w.deFull); if(c && cnt.get(c)===1) w.de=c; }
   for(const l of LESSONS) for(const id of l.words){ const w=BYID.get(id); if(w) w.lesson=l.id; }
-  SENTS=h.sentences; for(const s of SENTS) s.de=String(s.de).replace(/\s*[.!?]+$/,''); SBYID=new Map(SENTS.map(s=>[s.id,s]));
+  SENTS=h.sentences; for(const s of SENTS) s.de=deNoPunc(s.de); SBYID=new Map(SENTS.map(s=>[s.id,s]));
   for(const s of SENTS){
     /* Beispielsatz je Wort: der kürzeste Satz mit mindestens zwei Wörtern (ein Satz, der nur das Wort selbst ist, wäre sinnlos) */
     const nw=s.t.filter(x=>!x.punc).length; if(nw<2) continue;
