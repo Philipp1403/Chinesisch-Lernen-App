@@ -93,7 +93,7 @@ async function ensureChars(word){
 const KEY='hanyu.v2';
 let storageOk=true;
 const defaults=()=>({v:2,
-  settings:{level:1,rate:0.85,slowRate:0.5,voice:'',auto:true,showText:true,tones:false,pinyin:true,outline:true,perRound:8,theme:'auto',modes:{read:true,listen:true,write:true}},
+  settings:{level:1,rate:0.85,slowRate:0.5,voice:'',auto:true,showText:true,tones:false,pinyin:true,outline:true,showDe:true,freeDraw:false,showRef:true,perRound:8,theme:'auto',modes:{read:true,listen:true,write:true}},
   cards:{},stats:{},hard:{},hardOut:{},epoch:0,log:{},ui:{scope:[]}});
 let state=defaults();
 function load(){
