@@ -1,5 +1,5 @@
 from lib import *
-FAKE=open('n17.py').read().split('FAKE="""')[1].split('"""')[0]
+FAKE=open(__import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)),'n17.py')).read().split('FAKE="""')[1].split('"""')[0]
 e=Env(w=1024,h=712,sw=False,dark=True); pg=e.pg; pg.add_init_script(FAKE)
 def q(): pg.evaluate("document.querySelector('[data-s=quit]')&&document.querySelector('[data-s=quit]').click()"); pg.wait_for_timeout(250)
 try:

@@ -171,7 +171,6 @@ async function azAssess(s,refText){
         let json=null; try{ json=JSON.parse(r.properties.getProperty(SDK.PropertyId.SpeechServiceResponse_JsonResult)); }catch(_){}
         const res=json&&azParse(json,s);
         if(!res) return fin(silent()?{error:'silent',detail:'AudioContext '+ac.state}:{error:'no-speech'});
-        if(silent()) return fin({error:'silent',detail:'AudioContext '+ac.state});
         AZ.usageSec+=Math.max(res.az.seconds,1); azSave();
         fin({res,raw:json});
       },err=>fin({error:'canceled',detail:String(err)}));
