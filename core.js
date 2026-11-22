@@ -5,7 +5,7 @@ const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isHan = ch => /[㐀-鿿]/.test(ch);
 const DAY = 86400000;
-const APP_VERSION = 'v24'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
+const APP_VERSION = 'v25'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function dayStart(plus=0){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+plus); return d.getTime(); }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
