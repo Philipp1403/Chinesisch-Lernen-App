@@ -562,3 +562,48 @@ html[data-tones=off] .t0,html[data-tones=off] .t1,html[data-tones=off] .t2,html[
 .tok.pun{min-width:calc(48px*var(--tk))}
 .answer{min-height:clamp(112px,16vh,160px);padding:12px}
 .bank.wrap,.answer.wrap{flex-wrap:wrap;overflow-x:visible}
+
+/* ===== v26: nichts scrollen müssen (iPad quer), Seite darunter nie durchscheinen ===== */
+body.insession #shell{visibility:hidden}
+.sbody{scrollbar-width:none}
+.sbody::-webkit-scrollbar{display:none}
+@media (min-width:700px) and (max-height:830px){
+  .sinner{padding-top:2px;padding-bottom:12px}
+  .prompt{margin:2px 0 8px}
+  .tag-mode{margin-bottom:0}
+  .opts{gap:12px}
+  .opt{min-height:clamp(60px,9.5vh,88px)}
+  .opt .hz{font-size:clamp(32px,4.4vw,48px)}
+  .opt .py{font-size:clamp(15px,2vw,21px)}
+  .opts.long .opt{min-height:52px}
+  .ruby{margin-bottom:6px}
+  .ruby .r-hz{font-size:clamp(32px,5vw,50px)}
+  .ruby .r-py{font-size:clamp(16px,2.2vw,23px)}
+  .meaning{margin-top:6px;font-size:clamp(20px,2.6vw,26px)}
+  .cde{margin-bottom:10px}
+  .listentext{margin-bottom:10px}
+  .answer{min-height:clamp(92px,13vh,124px);padding:8px}
+  .tok{min-height:calc(clamp(70px,9.5vh,94px)*var(--tk))}
+  .tok .th{font-size:calc(clamp(30px,3.8vw,46px)*var(--tk))}
+  .tok .tp{font-size:calc(clamp(14px,1.7vw,20px)*var(--tk))}
+  .tok.de{min-height:calc(clamp(54px,7.5vh,70px)*var(--tk))}
+  .scorebox{margin:2px 0 6px}
+  .ring{width:84px;height:84px}
+  .ring b{width:66px;height:66px;font-size:24px}
+  .azsub{margin-bottom:6px}
+  .legend{margin-top:2px}
+  .micwrap{margin:8px 0 4px}
+  .sfoot.ok,.sfoot.no{padding-top:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+}
+/* Neues Wort: auf dem iPad quer zwei Spalten (links Wort, rechts Strichfolge und Beispiel) */
+@media (min-width:860px) and (max-height:830px){
+  .introlay{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:center}
+  .introl .bighz{font-size:clamp(72px,9vw,112px)}
+  .intror .card{margin-top:12px!important}
+}
+@media (min-width:700px) and (max-height:830px){
+  .sfoot .fb b{font-size:clamp(18px,2.2vw,22px);margin-bottom:0}
+  .sfoot .ruby .r-hz{font-size:clamp(24px,3.2vw,32px)}
+  .sfoot .ruby .r-py{font-size:clamp(14px,1.8vw,18px)}
+  .sfoot .fb div{font-size:clamp(16px,2vw,19px)}
+}

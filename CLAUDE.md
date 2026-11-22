@@ -43,6 +43,7 @@ Live: https://philipp1403.github.io/Chinesisch-Lernen-App/ (GitHub Pages, Branch
 - Tests für die Passwortsperre (`n12` bis `n16` in der Sandbox) liegen nicht im Repo, sie brauchen die Passphrase.
 - `window.__app` stellt Zustand und Startfunktionen für Tests bereit (`startPractice`, `startLearn`, `startReview`, `LESSONS`, `SBYID`, `S`).
 - `lock-config.js` im Repo ist die echte Sperre (nur der Hash). Beim Arbeiten nie durch eine Entwicklerversion ersetzen oder überschreiben.
+- Layout-Prüfung iPad quer: `tests/n44.py` misst in allen Übungen, ob man scrollen müsste. Er nutzt 1180x716 px, das entspricht dem echten iPad Air quer 1180x820 nach Abzug von Statusleiste und Home-Balken (an Philipps Screenshot geeicht, `n44` darf keine Überlänge melden).
 - Ein echtes iPad kann niemand außer Philipp prüfen. Bei Geräteproblemen um Screenshot der Einstellungen, Diagnose bitten.
 
 ## Arbeitsweise
@@ -52,7 +53,7 @@ Live: https://philipp1403.github.io/Chinesisch-Lernen-App/ (GitHub Pages, Branch
 - Den Chrome-Tab mit der GitHub-Seite nicht mehr nötig. Kein ZIP mehr bauen.
 
 ## Stand (22.11.2026)
-- Live ist `hanyu-v25` (neue Passwortsperre, sonst identisch mit v24). Zuletzt: v24 Kacheln in Satz bauen, Übersetzen und Hören und schreiben kleiner und immer in einer Zeile (`fitRow` in `tileBuilder`, Test `n43`); v23 Lernleiter für Wiederholen (`LADDER` in `core.js`, Test `n42`); v22 deutsche Sätze ohne Satzzeichen, 喂 = "Hallo"; v21 Rückmeldeleiste kompakt, größere Kacheln und Pinyin, eigene Icons je Übung, Einrichtung mit fester Fußleiste; v20 keine Satzzeichen im Chinesischen; v19 Mikrofon (Diagnose probiert mehrere Einstellungen, Rückfall auf Aufnahme, automatische Verstärkung, Pegelleiste).
+- Live ist `hanyu-v26` (iPad quer ohne Scrollen in allen Übungen, Seite darunter scheint nicht mehr durch, Sperrseite mit Benutzernamen-Feld für die Passwörter-Ausfüllhilfe; Tests `n44`, `n45`). Davor v25: neue Passwortsperre. v24 Kacheln in Satz bauen, Übersetzen und Hören und schreiben kleiner und immer in einer Zeile (`fitRow` in `tileBuilder`, Test `n43`); v23 Lernleiter für Wiederholen (`LADDER` in `core.js`, Test `n42`); v22 deutsche Sätze ohne Satzzeichen, 喂 = "Hallo"; v21 Rückmeldeleiste kompakt, größere Kacheln und Pinyin, eigene Icons je Übung, Einrichtung mit fester Fußleiste; v20 keine Satzzeichen im Chinesischen; v19 Mikrofon (Diagnose probiert mehrere Einstellungen, Rückfall auf Aufnahme, automatische Verstärkung, Pegelleiste).
 - Die Sprechübung mit Azure funktioniert auf Philipps iPad (von ihm bestätigt). Die Mikrofon-Pipeline nicht mehr anfassen, außer er meldet ein neues Problem.
 - Lernleiter: Die Abstände sind meine Wahl nach Philipps Vorgabe, nicht die von Phase 6 (deren Werte sind nicht belegt).
 - Git-Historie: Die Historie von `main` wurde bereinigt und per Force-Push ersetzt, damit alte Commits keine persönlichen Angaben mehr enthalten. Nie die alte Historie zurückpushen, nie `--force` ohne Philipps ausdrückliches Ja. Commit-Autor ist `Philipp` mit der noreply-Adresse von GitHub, keine echte E-Mail.

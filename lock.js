@@ -42,11 +42,12 @@ function lockGate(){
       <div class="pindots" id="pindots" role="img" aria-label="Eingegebene Ziffern">${'<i></i>'.repeat(N)}</div>
       <div class="pinpad" id="pinpad">${pad}</div>
       <div id="lockmsg" class="small" style="font-weight:700;min-height:22px" role="alert"></div>
-    </div>`:`<form class="lockbox" autocomplete="off">
+    </div>`:`<form class="lockbox" id="lockform" method="post" action="#">
       <div class="lockmark" aria-hidden="true">汉</div>
       <h1>Hanyu</h1>
       <p class="muted" style="font-weight:700">Bitte gib das Passwort ein.</p>
-      <input id="lockpw" class="search" type="password" placeholder="Passwort" autocomplete="current-password" autocapitalize="off" spellcheck="false" aria-label="Passwort">
+      <input id="lockuser" name="username" type="text" value="Hanyu" autocomplete="username" tabindex="-1" aria-hidden="true" readonly style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+      <input id="lockpw" name="password" class="search" type="password" placeholder="Passwort" autocomplete="current-password" autocapitalize="off" spellcheck="false" aria-label="Passwort">
       <button class="btn primary block" type="submit" id="lockbtn">Entsperren</button>
       <div id="lockmsg" class="small" style="font-weight:700;min-height:20px;margin-top:10px" role="alert"></div>
     </form>`;

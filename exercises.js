@@ -30,7 +30,7 @@ const autoSpeak=(t,slow=false)=>{ if(state.settings.auto) setTimeout(()=>speak(t
 let SESS=null; const EX={};
 function runSession(opts){
   SESS={title:opts.title||'',items:[...opts.items],total:opts.items.length,regen:opts.regen||null,onExit:opts.onExit||null,kind:opts.kind||'',t0:Date.now(),i:0,okFirst:0,cntFirst:0,learned:0,cleanup:null,handlers:[],noRetry:!!opts.noRetry,wrong:new Set(),lessonId:opts.lessonId||null};
-  const root=$('#session'); root.classList.remove('hidden'); document.body.style.overflow='hidden';
+  const root=$('#session'); root.classList.remove('hidden'); document.body.style.overflow='hidden'; document.body.classList.add('insession');
   root.innerHTML=`<div class="sbar"><button class="xbtn" data-s="quit" aria-label="Beenden">${ICON.x}</button><div class="bar thin p grow" role="progressbar"><i style="width:0%"></i></div></div><div class="sbody"><div class="sinner" id="sx"></div></div><div class="sfoot hidden" id="sf"></div>`;
   root.onclick=e=>{ if(e.target.closest('[data-s=quit]')) exitSession(); };
   showItem();
@@ -40,7 +40,7 @@ function exitSession(){
   try{ SESS.cleanup&&SESS.cleanup(); }catch(_){}
   stopSpeak(); abortListening();
   const cb=SESS.onExit; SESS=null;
-  $('#session').classList.add('hidden'); $('#session').innerHTML=''; document.body.style.overflow='';
+  $('#session').classList.add('hidden'); $('#session').innerHTML=''; document.body.style.overflow=''; document.body.classList.remove('insession');
   save(); if(cb) cb(); else renderView();
 }
 function setFooter(cls,html){ const f=$('#sf'); if(!f) return; f.className='sfoot '+(cls||''); f.innerHTML=`<div class="in">${html}</div>`; }
@@ -155,14 +155,14 @@ const TYPE_INFO={
 /* --- Neues Wort --- */
 EX.intro=(host,it,ctx)=>{
   const w=BYID.get(it.wid), py=wordPy(w), ex=EXAMPLE.get(w.id), s=ex?SBYID.get(ex):null;
-  host.innerHTML=`${MODE_TAG('Neues Wort')}
+  host.innerHTML=`${MODE_TAG('Neues Wort')}<div class="introlay"><div class="introl">
     <div class="hz bighz" style="margin:4px 0 2px">${hanziHtml(w.h,py)}</div>
     <div class="center"><span class="py">${pinyinHtml(py)}</span></div>
     <div class="meaning" style="margin:10px 0 16px">${esc(gloss(w))}</div>
-    ${audioRow()}
+    ${audioRow()}</div><div class="intror">
     <div class="muted small center" style="margin:18px 0 8px;font-weight:700">Tippe auf ein Zeichen, um die Strichfolge zu sehen</div>
     <div id="tiles" class="tiles"></div>
-    ${s?`<div class="card" style="margin-top:20px;padding:14px 10px 6px"><div class="small muted center" style="font-weight:800;margin-bottom:8px">BEISPIEL</div>${rubyHtml(s,{sm:true})}<div class="center" style="font-weight:700;margin:0 0 10px">${esc(s.de)}</div><div class="row" style="justify-content:center;margin-bottom:8px"><button class="slowbtn" data-ex="n">${ICON.speaker}Anhören</button><button class="slowbtn" data-ex="s">${ICON.slow}Langsam</button></div></div>`:''}`;
+    ${s?`<div class="card" style="margin-top:20px;padding:14px 10px 6px"><div class="small muted center" style="font-weight:800;margin-bottom:8px">BEISPIEL</div>${rubyHtml(s,{sm:true})}<div class="center" style="font-weight:700;margin:0 0 10px">${esc(s.de)}</div><div class="row" style="justify-content:center;margin-bottom:8px"><button class="slowbtn" data-ex="n">${ICON.speaker}Anhören</button><button class="slowbtn" data-ex="s">${ICON.slow}Langsam</button></div></div>`:''}</div></div>`;
   bindAudio(host,w.h);
   $$('[data-ex]',host).forEach(b=>b.addEventListener('click',()=>speak(sentenceText(s),{slow:b.dataset.ex==='s',parts:sentParts(s)})));
   mountTiles($('#tiles',host),w).catch(()=>{ $('#tiles',host).innerHTML='<p class="muted small">Strichdaten konnten nicht geladen werden.</p>'; });
