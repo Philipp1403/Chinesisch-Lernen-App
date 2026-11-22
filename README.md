@@ -2,7 +2,7 @@
 
 Learn Mandarin Chinese along the HSK 3.0 syllabus. Hanyu is a personal learning app that installs on the home screen like a native app. It is designed for iPad and iPhone, runs just as well on desktop, and is written in plain JavaScript with no framework and no build step.
 
-**Open the app:** https://philipp1403.github.io/Chinesisch-Lernen-App/ (German interface)
+This is a private project. The hosted copy is protected by a passcode, and the interface is in German.
 
 ## What you can do with it
 
@@ -16,7 +16,7 @@ Learn Mandarin Chinese along the HSK 3.0 syllabus. Hanyu is a personal learning 
 
 ## What you need
 
-- **Lessons, exercises, flashcards and writing:** nothing. Open the app in a browser. On iPad or iPhone, open it in Safari and choose Share, then Add to Home Screen.
+- **Lessons, exercises, flashcards and writing:** nothing beyond hosting the files on any HTTPS web host, for example GitHub Pages. On iPad or iPhone, open the page in Safari and choose Share, then Add to Home Screen.
 - **Pronunciation scoring:** a free Azure Speech resource (Free F0 tier) from your own Azure account. You enter its key and region in the app settings. Without it, the app falls back to the speech recognition of your browser.
 - **Sync between devices (optional):** a GitHub token from your own account with the Gists permission set to read and write.
 - **Passcode lock (optional):** a passcode you set yourself. Details are in `README.txt` (German).
