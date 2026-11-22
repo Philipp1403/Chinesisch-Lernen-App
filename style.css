@@ -505,14 +505,6 @@ html[data-tones=off] .t0,html[data-tones=off] .t1,html[data-tones=off] .t2,html[
 .wrow .sentence.sm .r-hz{font-size:clamp(26px,3.4vw,34px)}
 .ruby .r-py{font-size:clamp(17px,2.9vw,27px)}
 @media (min-width:700px){
-  .tok{min-width:clamp(96px,10vw,136px);min-height:clamp(110px,17vh,200px);padding:10px 28px 8px;border-radius:24px}
-  .tok .th{font-size:clamp(48px,7vw,86px)}
-  .tok .tp{font-size:clamp(20px,2.8vw,34px);margin-bottom:4px}
-  .tok.de{min-width:90px;min-height:clamp(78px,11vh,108px)}
-  .tok.de .th{font-size:clamp(26px,3vw,38px)}
-  .tok.pun{min-width:64px}
-  .answer{min-height:clamp(160px,28vh,340px)}
-  .bank{gap:18px}
   .opt{min-height:clamp(82px,14vh,140px)}
   .opt .hz{font-size:clamp(38px,6vw,64px)}
   .opt .py{font-size:clamp(17px,2.4vw,26px)}
@@ -557,3 +549,16 @@ html[data-tones=off] .t0,html[data-tones=off] .t1,html[data-tones=off] .t2,html[
 .lstep span{font-size:12.5px;font-weight:700;color:var(--muted);margin-top:2px}
 .lstep.has{border-color:var(--p);background:var(--p-soft)}
 .lstep.has b{color:var(--p)}
+
+/* v24: Kacheln kleiner, Auswahl und Antwort immer in EINER Zeile. --tk (0,45 bis 1) setzt tileBuilder so, dass alles nebeneinander passt. */
+.bank,.answer{--tk:1}
+.bank{flex-wrap:nowrap;justify-content:center;overflow-x:auto;gap:calc(12px*var(--tk))}
+.answer{flex-wrap:nowrap;overflow-x:auto;gap:calc(12px*var(--tk))}
+.tok{min-width:calc(64px*var(--tk));min-height:calc(clamp(84px,11vh,112px)*var(--tk));padding:calc(8px*var(--tk)) calc(16px*var(--tk)) calc(6px*var(--tk));border-radius:calc(20px*var(--tk));flex:none}
+.tok .th{font-size:calc(clamp(34px,4.6vw,56px)*var(--tk))}
+.tok .tp{font-size:calc(clamp(15px,1.9vw,22px)*var(--tk));margin-bottom:calc(2px*var(--tk))}
+.tok.de{min-width:calc(56px*var(--tk));min-height:calc(clamp(60px,8vh,80px)*var(--tk));padding:calc(8px*var(--tk)) calc(16px*var(--tk))}
+.tok.de .th{font-size:calc(clamp(20px,2.4vw,30px)*var(--tk))}
+.tok.pun{min-width:calc(48px*var(--tk))}
+.answer{min-height:clamp(112px,16vh,160px);padding:12px}
+.bank.wrap,.answer.wrap{flex-wrap:wrap;overflow-x:visible}

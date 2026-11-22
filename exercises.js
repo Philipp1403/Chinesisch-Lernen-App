@@ -218,10 +218,31 @@ function tileBuilder(host,it,ctx,mode){
   if(mode==='dictate'||trans) autoSpeak(sentenceText(s));
   const ansEl=$('#ans',host), bankEl=$('#bank',host);
   let locked=false;
+  /* Alle Kacheln immer in einer Zeile: Maßstab --tk so wählen, dass die ganze Auswahlreihe in die Breite passt */
+  function fitRow(){
+    if(!host.isConnected) return;
+    const W=bankEl.clientWidth-12; if(W<=0) return;
+    const floor=innerWidth>=700?0.55:0.75;   /* auf dem Handy bleiben die Zeichen lesbar, dort darf die Reihe umbrechen */
+    let k=1, total=0; bankEl.style.setProperty('--tk','1'); ansEl.style.setProperty('--tk','1');
+    for(let n=0;n<4;n++){
+      const tiles=[...bankEl.children]; if(!tiles.length) return;
+      const gap=parseFloat(getComputedStyle(bankEl).columnGap)||0;
+      total=tiles.reduce((a,t)=>a+t.offsetWidth,0)+gap*(tiles.length-1);
+      if(total<=W) break;
+      k=Math.max(floor,k*W/total*0.97);
+      bankEl.style.setProperty('--tk',k.toFixed(3)); ansEl.style.setProperty('--tk',k.toFixed(3));
+      if(k<=floor) { total=tiles.reduce((a,t)=>a+t.offsetWidth,0)+gap*(tiles.length-1); break; }
+    }
+    const wrap=total>W;
+    bankEl.classList.toggle('wrap',wrap); ansEl.classList.toggle('wrap',wrap);
+  }
+  const refit=()=>{ requestAnimationFrame(fitRow); };
+  window.addEventListener('resize',refit); if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refit);
   function draw(){
     ansEl.innerHTML=ans.map((k,i)=>tok(bank[k],'',`data-a="${i}"`)).join('');
     bankEl.innerHTML=bank.map(t=>ans.includes(t.k)?tok(t,'ghost','disabled'):tok(t,'',`data-b="${t.k}"`)).join('');
     ctx.setDisabled(1,!ans.length);
+    if(!draw.fitted){ draw.fitted=true; refit(); }
   }
   host.addEventListener('click',e=>{
     if(locked) return;
