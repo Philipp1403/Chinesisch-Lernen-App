@@ -2,7 +2,7 @@
 /* ============ Navigation ============ */
 let view={name:'learn'};
 const TABS=[['learn','Lernen',ICON.learn],['practice','Üben',ICON.train],['review','Wiederholen',ICON.cards],['words','Wörter',ICON.list],['settings','Einstellungen',ICON.gear]];
-function go(name,params={}){ view={name,...params}; renderView(); window.scrollTo(0,0); }
+function go(name,params={}){ view={name,...params}; renderView(); const mm=$('#main'); if(mm) mm.scrollTop=0; }
 function renderView(){
   renderTabs();
   const m=$('#main');
