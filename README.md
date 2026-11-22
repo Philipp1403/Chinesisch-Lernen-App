@@ -14,24 +14,23 @@ Learn Mandarin Chinese along the HSK 3.0 syllabus. Hanyu is a personal learning 
 - Watch the Oriental Pearl Tower fill up as you learn.
 - Look up a word list for HSK 1 to 6 with 5,400 words. Lessons exist for HSK 1 so far.
 
+## What you need
+
+- **Lessons, exercises, flashcards and writing:** nothing. Open the app in a browser. On iPad or iPhone, open it in Safari and choose Share, then Add to Home Screen.
+- **Pronunciation scoring:** a free Azure Speech resource (Free F0 tier) from your own Azure account. You enter its key and region in the app settings. Without it, the app falls back to the speech recognition of your browser.
+- **Sync between devices (optional):** a GitHub token from your own account with the Gists permission set to read and write.
+- **Passcode lock (optional):** a passcode you set yourself. Details are in `README.txt` (German).
+
 ## Built for daily use
 
 - Works offline as a PWA with a service worker.
 - Your progress stays on your device. Optional sync merges it between devices through a private GitHub Gist in your own account.
 - Optional passcode lock. The repo only holds a hash, never the passcode.
-- Keys and tokens are stored encrypted on the device and are never part of this repo.
+- Keys and tokens stay on your device, encrypted when the passcode lock is on, and are never part of this repo.
 
 ## How it is made
 
 Vanilla JavaScript, HTML and CSS. Tested with Playwright browser tests at iPad and iPhone widths and linted with ESLint. I developed it iteratively with Claude Code (AI-assisted).
-
-## Run it locally
-
-```
-python3 -m http.server 8000
-```
-
-Then open http://localhost:8000. Microphone and offline mode need HTTPS, which GitHub Pages provides. More setup notes in German are in `README.txt`.
 
 ## Credits
 
