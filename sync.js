@@ -35,6 +35,8 @@ function syShare(st){
 function mergeStates(a,b){
   const A=syShare(a), B=syShare(b);
   const clone=o=>JSON.parse(JSON.stringify(o));
+  /* Ein anderes Gerät kann noch das alte Kartenformat schicken: vor dem Vergleichen auf die zwei Phasen umrechnen (idempotent) */
+  A.cards=migrateCards(clone(A.cards)); B.cards=migrateCards(clone(B.cards));
   /* Zurücksetzen auf einem Gerät: der spätere Neustart gewinnt komplett, damit alte Stände nicht zurückkehren */
   if(A.epoch>B.epoch) return clone(A);
   if(B.epoch>A.epoch) return clone(B);

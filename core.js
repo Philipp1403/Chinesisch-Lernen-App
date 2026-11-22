@@ -5,7 +5,7 @@ const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isHan = ch => /[㐀-鿿]/.test(ch);
 const DAY = 86400000;
-const APP_VERSION = 'v28'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
+const APP_VERSION = 'v29'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function dayStart(plus=0){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+plus); return d.getTime(); }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -110,6 +110,7 @@ function load(){
     const s=localStorage.getItem(KEY);
     if(s){ const o=JSON.parse(s); const d=defaults(); state=Object.assign(d,o); state.settings=Object.assign(d.settings,o.settings||{}); state.settings.modes=Object.assign(d.settings.modes,(o.settings||{}).modes||{}); state.ui=Object.assign(d.ui,o.ui||{}); }
   }catch(e){ storageOk=false; }
+  migrateCards(state.cards);   /* alte Karten einmalig auf die zwei Phasen umrechnen (idempotent) */
 }
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){ storageOk=false; } if(typeof syQueue==='function') syQueue(); }
 function applyTones(){ document.documentElement.dataset.tones = state.settings.tones?'on':'off'; }
@@ -120,42 +121,81 @@ function applyTheme(){
   const m=$('meta[name=theme-color]'); if(m) m.content = dark?'#0E1220':'#4455E6';
 }
 
-/* ============ Wiederholungs-Plan: Leiter mit festen Stufen ============
-   Jedes Wort steht auf einer Stufe (card.s). Der Abstand bis zur nächsten Wiederholung hängt nur von der Stufe ab:
-   1 Min, 15 Min, 1 Std, 1 Tag, 2 Tage, 4 Tage, 1 Woche, 2 Wochen, 1 Monat, 2 Monate, 4 Monate.
-   Nochmal: zurück auf Stufe 1. Schwer: auf kurzen Stufen bleiben, auf langen eine Stufe zurück. Gut: eine Stufe hoch. Leicht: zwei Stufen hoch.
-   Dreimal "Leicht" hintereinander bringt ein Wort von Stufe 1 auf 1 Woche (Stufe 7). Die Abstände sind meine Wahl nach Philipps Vorgabe, nicht die von Phase 6 (nicht belegt). */
-const LADDER=[1,15,60,1440,2880,5760,10080,20160,43200,86400,172800]; /* Minuten */
-function stepLabel(min){
-  if(min<60) return min+' Min'; if(min<1440) return Math.round(min/60)+' Std';
-  const d=Math.round(min/1440); if(d<7) return d+(d===1?' Tag':' Tage');
-  if(d<30){ const w=Math.round(d/7); return w+(w===1?' Woche':' Wochen'); }
-  const m=Math.round(d/30); return m+(m===1?' Monat':' Monate');
+/* ============ Wiederholungs-Plan: zwei Phasen ============
+   Phase 1, Lernphase (neues Wort oder nach einem Fehler): feste Schritte in Minuten.
+   Phase 2, Wiederholung: Intervall in Tagen, jedes Mal mal einem Faktor, je nach Bewertung.
+   Die Lernschritte entsprechen den Anki-Standardwerten (1 und 10 Minuten). Alle Zahlen unten (Abschlussintervalle, Faktoren 1,3 / 2,2 / 3,5,
+   die 30 % nach einem Fehler und die Obergrenze) sind eigene Festlegungen von Philipp und leicht hier zu ändern. */
+const LEARN_STEPS=[1,10];                 /* Minuten der Lernphase */
+const RELEARN_STEP=10;                    /* Minuten nach einem Fehler in der Wiederholung */
+const HARD_FIRST_STEP=LEARN_STEPS.length>1?Math.round((LEARN_STEPS[0]+LEARN_STEPS[1])/2):LEARN_STEPS[0];   /* Schwer auf Schritt 1: 6 Min */
+const GRAD_GOOD=1, GRAD_EASY=4;           /* Tage beim Abschluss der Lernphase (Gut nach dem letzten Schritt / Leicht) */
+const FACTOR_HARD=1.3, FACTOR_GOOD=2.2, FACTOR_EASY=3.5;
+const LAPSE_FACTOR=0.3;                   /* neues Intervall nach Fehler = 30 % des alten */
+const MAX_INTERVAL=120;                   /* Tage */
+const CARD_V=2;                           /* Kartenformat dieser Logik */
+const OLD_LADDER=[1,15,60,1440,2880,5760,10080,20160,43200,86400,172800];   /* alte Leiter (Minuten), nur für die Umrechnung */
+
+function minLabel(min){ return min<60?min+' Min':Math.round(min/60)+' Std'; }
+function dayLabel(d){ return d+(d===1?' Tag':' Tage'); }
+/* Karte aus altem Format (Stufe c.s der Leiter, Tage c.i) in das neue umrechnen. Rein und idempotent: Karten mit v===CARD_V bleiben unverändert.
+   Die Fälligkeit c.d bleibt immer unverändert, damit keine Karte plötzlich fällig wird. */
+function migrateCard(c){
+  if(!c||c.v===CARD_V) return c;
+  const o=Object.assign({},c);
+  let box;
+  if(typeof c.s==='number') box=Math.max(0,Math.min(OLD_LADDER.length-1,c.s));
+  else if(!c.r||!c.i) box=0;
+  else{ box=3; for(let k=3;k<OLD_LADDER.length;k++) if(OLD_LADDER[k]<=c.i*1440) box=k; }
+  if(box<=2){ o.m=0; o.ls=Math.min(box,LEARN_STEPS.length-1); o.i=0; }
+  else{ o.m=1; o.ls=0; o.i=Math.min(MAX_INTERVAL,c.i>0?Math.round(c.i):Math.round(OLD_LADDER[box]/1440)); }
+  o.io=0; delete o.s; o.v=CARD_V;
+  return o;
 }
-/* Stufe einer Karte; Altbestand (nur Tage in c.i) wird auf die passende Stufe gelegt */
-function boxOf(c){
-  if(typeof c.s==='number') return Math.max(0,Math.min(LADDER.length-1,c.s));
-  if(!c.r||!c.i) return 0;
-  let b=3; for(let k=3;k<LADDER.length;k++) if(LADDER[k]<=c.i*1440) b=k;
-  return b;
-}
-function sched(c,q,known){
-  const b=boxOf(c); let nb;
-  if(q===0) nb=0;
-  else if(q===1) nb=b<=2?b:b-1;
-  else if(q===2) nb=b+1;
-  else nb=known?Math.max(b+2,3):b+2;
-  nb=Math.max(0,Math.min(LADDER.length-1,nb));
-  const min=LADDER[nb];
-  return {s:nb,min,i:min>=1440?Math.round(min/1440):0,r:(c.r||0)+1,l:(c.l||0)+(q===0?1:0),e:c.e||2.5};
-}
-const newCard=()=>({e:2.5,i:0,r:0,l:0,s:0,d:Date.now()});
+function migrateCards(cards){ for(const id of Object.keys(cards||{})) cards[id]=migrateCard(cards[id]); return cards; }
+const newCard=()=>({e:2.5,i:0,r:0,l:0,m:0,ls:0,io:0,d:Date.now(),v:CARD_V});
 function ensureCard(id){ if(!state.cards[id]){ state.cards[id]=newCard(); return true; } return false; }
-/* Bewertung anwenden; gibt den neuen Fälligkeitszeitpunkt zurück. known: "Kenne ich schon" springt mindestens auf Stufe 4 (1 Tag) */
-function applyRating(id,q,known){
-  const c=state.cards[id]||newCard(); const s=sched(c,q,known);
-  const due=s.min>=1440?dayStart(Math.round(s.min/1440)):Date.now()+s.min*60000;
-  state.cards[id]={e:s.e,i:s.i,r:s.r,l:s.l,s:s.s,d:due};
+/* Tage zwischen Fälligkeitstag und heute (nur wenn überfällig), nach Kalendertagen, damit Sommerzeit nichts verschiebt */
+function overdueDays(c,now){ const a=new Date(c.d).setHours(0,0,0,0), b=new Date(now).setHours(0,0,0,0); return Math.max(0,Math.round((b-a)/DAY)); }
+/* Intervalle (Tage) der drei Antworten Schwer, Gut, Leicht für eine Karte in der Wiederholung */
+function reviewIntervals(c,now){
+  const I=Math.max(1,Math.round(c.i)||1), base=I+overdueDays(c,now);   /* base = max(Intervall, tatsächlich vergangene Tage) */
+  let h=Math.max(I,Math.round(base*FACTOR_HARD)), g=Math.round(base*FACTOR_GOOD), e=Math.round(base*FACTOR_EASY);
+  if(g<=h) g=h+1; if(e<=g) e=g+1;                                    /* Schwer < Gut < Leicht, mindestens ein Tag Abstand */
+  const cap=x=>Math.min(MAX_INTERVAL,x);
+  return {I,base,hard:cap(h),good:cap(g),easy:cap(e)};
+}
+/* Was passiert bei Antwort q (0 Nochmal, 1 Schwer, 2 Gut, 3 Leicht)? Ergebnis: neue Kartenfelder plus min (Minuten) oder days (Tage). */
+function sched(c,q,now=Date.now()){
+  c=migrateCard(c);
+  const r=(c.r||0)+1, e=c.e||2.5; let l=c.l||0;
+  const grad=days=>{ days=Math.max(1,Math.min(MAX_INTERVAL,days)); return {m:1,ls:0,io:0,i:days,r,l,e,days}; };
+  if(c.m===1){                                   /* Wiederholung */
+    const iv=reviewIntervals(c,now);
+    if(q===0) return {m:0,ls:0,io:iv.I,i:0,r,l:l+1,e,min:RELEARN_STEP};   /* Fehler: zurück in die Lernphase, altes Intervall merken */
+    return grad(q===1?iv.hard:q===2?iv.good:iv.easy);
+  }
+  if(c.io>0){                                    /* Lernphase nach einem Fehler: ein Schritt, danach 30 % des alten Intervalls */
+    const back=Math.max(1,Math.round(LAPSE_FACTOR*c.io));
+    if(q===3) return grad(back+1);
+    if(q===2) return grad(back);
+    return {m:0,ls:0,io:c.io,i:0,r,l,e,min:RELEARN_STEP};
+  }
+  const ls=Math.max(0,Math.min(LEARN_STEPS.length-1,c.ls|0));        /* normale Lernphase */
+  if(q===0) return {m:0,ls:0,io:0,i:0,r,l,e,min:LEARN_STEPS[0]};
+  if(q===1) return {m:0,ls,io:0,i:0,r,l,e,min:ls===0?HARD_FIRST_STEP:LEARN_STEPS[ls]};
+  if(q===2){
+    if(ls+1<LEARN_STEPS.length) return {m:0,ls:ls+1,io:0,i:0,r,l,e,min:LEARN_STEPS[ls+1]};
+    return grad(GRAD_GOOD);
+  }
+  return grad(GRAD_EASY);                        /* Leicht (und "Kenne ich schon") schließt die Lernphase sofort ab */
+}
+const ratingLabel=s=>s.days?dayLabel(s.days):minLabel(s.min);
+/* Bewertung anwenden; gibt den neuen Fälligkeitszeitpunkt zurück */
+function applyRating(id,q){
+  const now=Date.now(), c=state.cards[id]||newCard(), s=sched(c,q,now);
+  const due=s.days?dayStart(s.days):now+s.min*60000;
+  state.cards[id]={e:s.e,i:s.i,r:s.r,l:s.l,m:s.m,ls:s.ls,io:s.io,d:due,v:CARD_V};
   const k=todayKey(); state.log[k]=(state.log[k]||0)+1;
   return due;
 }

@@ -196,7 +196,8 @@ function viewReview(m){
   const next=Object.values(state.cards).filter(c=>c.d>Date.now()).sort((a,b)=>a.d-b.d)[0];
   const mastered=Object.values(state.cards).filter(c=>c.i>=30).length;
   const nextTxt=!next?'Alles erledigt.':(()=>{ const ms=next.d-Date.now(); if(ms<3600000) return 'Als Nächstes fällig: in '+Math.max(1,Math.ceil(ms/60000))+' Min'; if(ms<86400000) return 'Als Nächstes fällig: in '+Math.round(ms/3600000)+' Std'; return 'Als Nächstes fällig: '+new Date(next.d).toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'}); })();
-  const perBox=LADDER.map((_,k)=>Object.values(state.cards).filter(c=>boxOf(c)===k).length);
+  const BUCKETS=[['Lernphase',c=>c.m===0],['1 bis 3 Tage',c=>c.m===1&&c.i<=3],['4 bis 14 Tage',c=>c.m===1&&c.i>=4&&c.i<=14],['15 bis 60 Tage',c=>c.m===1&&c.i>=15&&c.i<=60],['über 60 Tage',c=>c.m===1&&c.i>60]];
+  const perBox=BUCKETS.map(([,f])=>Object.values(state.cards).map(migrateCard).filter(f).length);
   m.innerHTML=`<div class="stack fade">
     <div><h1>Wiederholen</h1><p class="muted" style="font-weight:700;margin-top:2px">Lernleiter: Je sicherer du ein Wort kannst, desto seltener kommt es.</p></div>
     <div class="card" style="text-align:center;padding:28px 18px">
@@ -209,8 +210,8 @@ function viewReview(m){
     ${hardCard()}
     ${flashCard()}
     ${total?`<div class="card"><h3 style="margin-bottom:4px">Lernleiter</h3>
-      <p class="muted small" style="font-weight:600;margin-bottom:12px">Nochmal: zurück auf 1 Min. Gut: eine Stufe hoch. Leicht: zwei Stufen hoch. Schwer: bleibt, bei langen Abständen eine Stufe zurück.</p>
-      <div class="ladder">${LADDER.map((m,k)=>`<div class="lstep ${perBox[k]?'has':''}"><b>${perBox[k]}</b><span>${stepLabel(m)}</span></div>`).join('')}</div></div>`:''}
+      <p class="muted small" style="font-weight:600;margin-bottom:12px">Neue Wörter durchlaufen erst die Lernphase (1 und 10 Minuten). Danach wächst der Abstand: Schwer etwa mal 1,3, Gut mal 2,2, Leicht mal 3,5, höchstens 120 Tage. Nochmal schickt ein Wort zurück in die Lernphase.</p>
+      <div class="ladder">${BUCKETS.map(([t],k)=>`<div class="lstep ${perBox[k]?'has':''}"><b>${perBox[k]}</b><span>${t}</span></div>`).join('')}</div></div>`:''}
     <div class="card"><h3 style="margin-bottom:10px">Kartenarten</h3>
       ${[['read','Lesen','Zeichen sehen, Bedeutung und Aussprache wissen'],['listen','Hören','Wort hören, Bedeutung wissen'],['write','Schreiben','Zeichen mit richtiger Strichfolge zeichnen']].map(([k,t,d])=>`<div class="set"><div class="l"><b>${t}</b><span>${d}</span></div><button class="sw" role="switch" aria-checked="${state.settings.modes[k]}" data-mode="${k}" aria-label="${t}"></button></div>`).join('')}
     </div>
@@ -508,7 +509,7 @@ function viewSettings(m){
     if(e.target.closest('[data-import]')){
       const bk=$('#bk',m), msg=$('#bkmsg',m);
       if(bk.classList.contains('hidden')){ bk.classList.remove('hidden'); bk.value=''; msg.textContent='Füge den Sicherungstext ein und tippe nochmal auf „Aus Text wiederherstellen“.'; return; }
-      try{ const o=JSON.parse(bk.value); if(!o||typeof o!=='object'||!o.cards) throw new Error('x'); state=Object.assign(defaults(),o); state.settings=Object.assign(defaults().settings,o.settings||{}); state.settings.modes=Object.assign(defaults().settings.modes,(o.settings||{}).modes||{}); save(); applyTheme(); msg.textContent='Wiederhergestellt.'; setTimeout(renderView,600); }
+      try{ const o=JSON.parse(bk.value); if(!o||typeof o!=='object'||!o.cards) throw new Error('x'); state=Object.assign(defaults(),o); state.settings=Object.assign(defaults().settings,o.settings||{}); state.settings.modes=Object.assign(defaults().settings.modes,(o.settings||{}).modes||{}); migrateCards(state.cards); save(); applyTheme(); msg.textContent='Wiederhergestellt.'; setTimeout(renderView,600); }
       catch(_){ msg.textContent='Der Text ist keine gültige Sicherung.'; }
       return;
     }

@@ -168,7 +168,7 @@ EX.intro=(host,it,ctx)=>{
   mountTiles($('#tiles',host),w).catch(()=>{ $('#tiles',host).innerHTML='<p class="muted small">Strichdaten konnten nicht geladen werden.</p>'; });
   autoSpeak(w.h);
   ctx.footer([
-    {label:'Kenne ich schon',cls:'quiet',onClick:()=>{ ensureCard(w.id); applyRating(w.id,3,true); SESS.learned++; save(); ctx.next(); }},
+    {label:'Kenne ich schon',cls:'quiet',onClick:()=>{ ensureCard(w.id); applyRating(w.id,3); SESS.learned++; save(); ctx.next(); }},
     {label:'Weiter',cls:'primary grow',onClick:()=>{ ensureCard(w.id); SESS.learned++; save(); ctx.next(); }},
   ]);
 };
@@ -606,7 +606,7 @@ EX.review=(host,it,ctx)=>{
   };
   const ratingFooter=(sug)=>{
     const labels=['Nochmal','Schwer','Gut','Leicht'];
-    ctx.footerRaw(`<div class="rate" style="margin:0;width:100%">${labels.map((t,q)=>`<button class="r${q} ${sug===q?'sug':''}" data-rate="${q}">${t}<small>${stepLabel(sched(c,q).min)}</small></button>`).join('')}</div>`,
+    ctx.footerRaw(`<div class="rate" style="margin:0;width:100%">${labels.map((t,q)=>`<button class="r${q} ${sug===q?'sug':''}" data-rate="${q}">${t}<small>${ratingLabel(sched(c,q))}</small></button>`).join('')}</div>`,
       e=>{ const b=e.target.closest('[data-rate]'); if(b) rate(+b.dataset.rate); });
   };
   function reveal(sug){
