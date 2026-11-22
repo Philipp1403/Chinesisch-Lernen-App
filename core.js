@@ -5,7 +5,7 @@ const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isHan = ch => /[㐀-鿿]/.test(ch);
 const DAY = 86400000;
-const APP_VERSION = 'v27'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
+const APP_VERSION = 'v28'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function dayStart(plus=0){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+plus); return d.getTime(); }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -213,8 +213,13 @@ function speakParts(text,parts){
   const chars=[...text].filter(isHan);
   return chars.length>1?chars:[];
 }
+/* iPhone (nicht iPad: iPadOS meldet sich als Mac): hat einen Stumm-Schalter. Die Audio-Sitzung auf "playback" zu stellen ist ein Versuch,
+   dass Ton auch dann hörbar bleibt (Wirkung auf die Sprachausgabe nicht belegt, deshalb zeigt die Diagnose den Zustand). */
+const IS_IPHONE=/iPhone/.test(navigator.userAgent);
+function phoneAudioPrepare(){ if(!IS_IPHONE) return; try{ if(navigator.audioSession&&navigator.audioSession.type!=='playback') navigator.audioSession.type='playback'; }catch(_){} }
 function speak(text,opts={}){
   const slow=!!opts.slow; const my=++speakTick;
+  phoneAudioPrepare();
   return new Promise(res=>{
     if(!('speechSynthesis' in window)) return res(false);
     try{

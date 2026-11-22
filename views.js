@@ -12,7 +12,7 @@ function renderView(){
 function renderTabs(){
   const cur = view.name==='lesson' ? 'learn' : view.name;
   const due=dueIds().length;
-  $('#tabs').innerHTML=`<div class="logo"><i>汉</i>Hanyu</div>`+TABS.map(([k,t,i])=>`<button data-tab="${k}" aria-current="${cur===k}">${i}<span>${t}${k==='review'&&due?` (${due})`:''}</span></button>`).join('');
+  $('#tabs').innerHTML=`<div class="logo"><i>汉</i>Hanyu</div>`+TABS.map(([k,t,i])=>`<button data-tab="${k}" aria-current="${cur===k}">${i}<span>${t}${k==='review'&&due?`<b class="due" data-n="${due}"></b>`:''}</span></button>`).join('');
 }
 $('#tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-tab]'); if(b) go(b.dataset.tab); });
 
@@ -336,6 +336,20 @@ async function runDiag(out){
     else add(`Azure-Test: Score <b>${r.res.score}</b>, verstanden „${esc(r.res.heard)}“${r.viaRecorder?' (über die Aufnahme)':''} [${esc(r.dbg||'')}]`);
   }
   stopSpeak();
+  if(IS_IPHONE){
+    const as=navigator.audioSession;
+    add(`iPhone erkannt. Audio-Sitzung: <b>${as?esc(as.type)+', '+esc(as.state||'?'):'nicht verfügbar'}</b>`);
+    add('Tontest: Es kommen drei Töne nacheinander. Prüfe vorher den Stumm-Schalter an der linken Seite des iPhones (ist ein orangefarbenes Feld zu sehen, ist es stumm) und die Lautstärke. Sag mir danach, welche Nummern du gehört hast.');
+    await sleep(1200);
+    add('Ton 1 (Audio-Element) kommt jetzt …');
+    try{ const wav=(()=>{ const sr=22050,n=Math.round(sr*0.5),b=new ArrayBuffer(44+n*2),v=new DataView(b),w=(o,t)=>{ for(let i=0;i<t.length;i++) v.setUint8(o+i,t.charCodeAt(i)); };
+      w(0,'RIFF'); v.setUint32(4,36+n*2,true); w(8,'WAVE'); w(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,'data'); v.setUint32(40,n*2,true);
+      for(let i=0;i<n;i++) v.setInt16(44+i*2,Math.sin(2*Math.PI*880*i/sr)*0.5*32767*Math.min(1,i/400,(n-i)/400),true); return URL.createObjectURL(new Blob([b],{type:'audio/wav'})); })();
+      const a=new Audio(wav); a.volume=1; await a.play(); await sleep(900); }catch(e){ add(`Ton 1 nicht abspielbar: ${esc(String(e&&e.message||e))}`,'bad'); }
+    add('Ton 2 (Web Audio) kommt jetzt …');
+    try{ const AC=window.AudioContext||window.webkitAudioContext, c=new AC(); await c.resume(); const o=c.createOscillator(), g=c.createGain(); o.frequency.value=660; g.gain.value=0.4; o.connect(g); g.connect(c.destination); o.start(); await sleep(500); o.stop(); await sleep(150); try{ c.close(); }catch(_){} }catch(e){ add(`Ton 2 nicht abspielbar: ${esc(String(e&&e.message||e))}`,'bad'); }
+    add('Ton 3 ist die Sprachausgabe (siehe unten).');
+  }
   add('Sprachausgabe-Probe (danach): gleich kommt „nǐ … hǎo … nǐhǎo“ langsam. Hörst du etwas?');
   window.__tts.length=0; const t0=performance.now();
   await speak('你好',{slow:true});
@@ -349,7 +363,7 @@ function viewSettings(m){
   const voices=zhVoices;
   m.innerHTML=`<div class="stack fade"><h1>Einstellungen</h1>
     ${storageOk?'':`<div class="warnbox">Dein Browser speichert hier nichts. Der Fortschritt geht beim Schließen verloren. Erstelle regelmäßig eine Sicherung.</div>`}
-    <div class="card"><h3 style="margin-bottom:6px">Aussprache</h3>
+    <div class="card"><h3 style="margin-bottom:6px">Aussprache</h3>${IS_IPHONE?'<div class="infobox" style="margin:8px 0 6px">Kein Ton auf dem iPhone? Prüfe den Stumm-Schalter an der linken Seite (orangefarbenes Feld sichtbar heißt stumm) und die Lautstärke. Unter Einstellungen, Diagnose gibt es einen Tontest.</div>':''}
       <div class="set"><div class="l"><b>Stimme</b><span>${voices.length?`${voices.length} chinesische Stimme${voices.length>1?'n':''} gefunden`:'Keine chinesische Stimme gefunden'}</span></div><select id="voice"><option value="">Automatisch</option>${voices.map(v=>`<option value="${esc(v.voiceURI)}" ${s.voice===v.voiceURI?'selected':''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('')}</select></div>
       <div class="set"><div class="l"><b>Tempo normal</b><span id="rv">${s.rate.toFixed(2)}</span></div><input type="range" id="rate" min="0.5" max="1.2" step="0.05" value="${s.rate}"></div>
       <div class="set"><div class="l"><b>Tempo langsam</b><span id="sv">${s.slowRate.toFixed(2)}</span></div><input type="range" id="slow" min="0.2" max="0.8" step="0.05" value="${s.slowRate}"></div>

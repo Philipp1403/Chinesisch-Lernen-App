@@ -218,11 +218,32 @@ function tileBuilder(host,it,ctx,mode){
   if(mode==='dictate'||trans) autoSpeak(sentenceText(s));
   const ansEl=$('#ans',host), bankEl=$('#bank',host);
   let locked=false;
-  /* Alle Kacheln immer in einer Zeile: Maßstab --tk so wählen, dass die ganze Auswahlreihe in die Breite passt */
+  /* iPad und Desktop: Alle Kacheln immer in einer Zeile, Maßstab --tk so wählen, dass die ganze Auswahlreihe in die Breite passt.
+     Handy (unter 700 px): passt sie nicht in eine Zeile, wird sie gleichmäßig auf zwei Zeilen verteilt (Umbruch-Marke .brk), die Kacheln bleiben groß. */
+  let breakAt=0;
+  const putBreak=()=>{ bankEl.querySelectorAll('.brk').forEach(x=>x.remove()); if(breakAt){ const t=bankEl.querySelectorAll('.tok')[breakAt-1]; if(t) t.insertAdjacentHTML('afterend','<i class="brk"></i>'); } };
+  function fitPhone(W){
+    breakAt=0; putBreak();
+    bankEl.style.setProperty('--tk','1'); ansEl.style.setProperty('--tk','1'); bankEl.classList.add('wrap'); ansEl.classList.add('wrap');
+    const tiles=[...bankEl.querySelectorAll('.tok')], n=tiles.length; if(!n) return;
+    const gap=parseFloat(getComputedStyle(bankEl).columnGap)||0, ws=tiles.map(t=>t.offsetWidth);
+    const rowW=(a,b)=>{ let x=0; for(let i=a;i<b;i++) x+=ws[i]; return x+gap*(b-a-1); };
+    const total=rowW(0,n); let k=1;
+    if(total>W){
+      if(W/total>=0.95) k=W/total*0.97;               /* nur knapp zu breit: eine Zeile, minimal verkleinert */
+      else{
+        let best=1, bestW=1e9; for(let i=1;i<n;i++){ const m=Math.max(rowW(0,i),rowW(i,n)); if(m<bestW){ bestW=m; best=i; } }
+        k=Math.min(1,W/bestW*0.97);
+        if(k>=0.6) breakAt=best; else k=Math.max(0.6,W/total*0.97);   /* sehr lange Sätze: Zeilen brechen von selbst um */
+      }
+    }
+    bankEl.style.setProperty('--tk',k.toFixed(3)); ansEl.style.setProperty('--tk',k.toFixed(3)); putBreak();
+  }
   function fitRow(){
     if(!host.isConnected) return;
     const W=bankEl.clientWidth-12; if(W<=0) return;
-    const floor=innerWidth>=700?0.55:0.75;   /* auf dem Handy bleiben die Zeichen lesbar, dort darf die Reihe umbrechen */
+    if(innerWidth<700) return fitPhone(W);
+    const floor=0.55;
     let k=1, total=0; bankEl.style.setProperty('--tk','1'); ansEl.style.setProperty('--tk','1');
     for(let n=0;n<4;n++){
       const tiles=[...bankEl.children]; if(!tiles.length) return;
@@ -241,6 +262,7 @@ function tileBuilder(host,it,ctx,mode){
   function draw(){
     ansEl.innerHTML=ans.map((k,i)=>tok(bank[k],'',`data-a="${i}"`)).join('');
     bankEl.innerHTML=bank.map(t=>ans.includes(t.k)?tok(t,'ghost','disabled'):tok(t,'',`data-b="${t.k}"`)).join('');
+    putBreak();
     ctx.setDisabled(1,!ans.length);
     if(!draw.fitted){ draw.fitted=true; refit(); }
   }
