@@ -1,3 +1,5 @@
+# Diese Datei wirkt NICHT auf GitHub Pages (dort gibt es keine eigenen Kopfzeilen). Sie gilt nur bei Netlify oder Cloudflare Pages.
+# Auf GitHub Pages ersetzen das Meta-Tag für die CSP und das Referrer-Meta-Tag in index.html einen Teil davon.
 /*
   X-Robots-Tag: noindex, nofollow, noarchive
   Referrer-Policy: no-referrer

@@ -67,6 +67,7 @@ function mergeStates(a,b){
 }
 /* Gemischtes Ergebnis in den laufenden Zustand übernehmen (Einstellungen und Ansicht bleiben unberührt) */
 function syApply(m){
+  m=Object.assign({},m,sanitizeLearning(m));   /* Gist-Stand ist eine Eingabe von außen */
   state.epoch=m.epoch; state.cards=m.cards; state.stats=m.stats; state.hard=m.hard; state.hardOut=m.hardOut; state.log=m.log;
   state.ui=state.ui||{}; state.ui.tests=m.tests;
 }

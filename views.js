@@ -56,7 +56,7 @@ function viewLesson(m){
     <div class="pagehead"><button class="btn small" data-back>${ICON.back.replace('<svg','<svg width="18" height="18"')}Zurück</button></div>
     <div class="lhead" style="${lessonStyle(l)}"><div class="ic ${l.icon.length>1?'ic2':''}">${l.icon}</div><div class="grow"><h1>${esc(l.title)}</h1><p class="muted" style="font-weight:700">${esc(l.sub)}</p><div class="bar thin" style="margin-top:10px;max-width:260px"><i style="width:${p.learned/p.total*100}%"></i></div><div class="muted small" style="font-weight:800;margin-top:4px">${p.learned} von ${p.total} Wörtern gelernt</div></div></div>
     <button class="btn primary block big" data-learn>${p.learned===p.total?'Wörter nochmal ansehen':p.learned?'Weitere Wörter lernen':'Wörter lernen'}</button>
-    <button class="testcard" data-test><div class="ei">${ICON.cards}</div><div class="grow"><b>Lektionstest</b><span>${l.words.length} Fragen nur zu den Wörtern dieser Lektion${tst?`, letzter Stand ${tst.last}%, beste ${tst.best}%`:''}</span></div><span class="btn small">Starten</span></button>
+    <button class="testcard" data-test><div class="ei">${ICON.cards}</div><div class="grow"><b>Lektionstest</b><span>${l.words.length} Fragen nur zu den Wörtern dieser Lektion${tst?`, letzter Stand ${esc(tst.last)}%, beste ${esc(tst.best)}%`:''}</span></div><span class="btn small">Starten</span></button>
     <div class="sectionhead"><h2>Üben</h2><span class="muted small" style="font-weight:700">nur diese Lektion</span></div>
     <div class="exgrid">${ex.map(t=>`<button class="excard" data-ex="${t}"><div class="ei">${ICON[TYPE_INFO[t].icon]}</div><div><b>${TYPE_INFO[t].name}</b><span>${TYPE_INFO[t].desc}</span></div></button>`).join('')}</div>
     <div class="sectionhead"><h2>Wörter</h2><span class="muted small" style="font-weight:700">Tippe zum Anhören</span></div>
@@ -170,7 +170,7 @@ function hardCard(){
   const ids=hardIds();
   const rows=ids.slice(0,10).map(id=>{
     const w=BYID.get(id), h=state.hard[id], py=wordPy(w);
-    const tags=Object.entries(h.k||{}).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<span class="kindtag">${KIND_LABEL[k]||k} ${n}×</span>`).join('');
+    const tags=Object.entries(h.k||{}).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<span class="kindtag">${esc(KIND_LABEL[k]||k)} ${esc(n)}×</span>`).join('');
     const dots=Array.from({length:HARD_OUT},(_,i)=>`<i class="${i<h.s?'done':''}"></i>`).join('');
     return `<div class="wrow" data-w="${w.id}" style="cursor:pointer"><div class="hz">${hanziHtml(w.h,py)}</div><div class="mid"><div class="py">${pinyinHtml(py)}</div><div class="de">${esc(gloss(w))}</div><div class="kindrow">${tags}</div></div><div class="hdots" title="${h.s} von ${HARD_OUT} richtig in Folge">${dots}</div></div>`;
   }).join('');
@@ -469,6 +469,7 @@ function viewSettings(m){
       const rg=$('#azregion',m).value.trim().toLowerCase().replace(/\s+/g,''), k=$('#azkey',m).value.trim();
       const out=$('#azres',m);
       if(!rg){ out.textContent='Bitte eine Region eintragen, zum Beispiel westeurope.'; return; }
+      if(!/^[a-z0-9]{3,30}$/.test(rg)){ out.textContent='Die Region darf nur Kleinbuchstaben und Ziffern enthalten, zum Beispiel westeurope.'; return; }
       if(!k && !AZ.key){ out.textContent='Bitte den Schlüssel einfügen.'; return; }
       AZ.region=rg; if(k) AZ.key=k; if(!AZ.engineSet) AZ.engine='azure'; azSave(); out.textContent='Gespeichert. Mit „Azure testen“ prüfst du, ob alles stimmt.'; setTimeout(renderView,700); return;
     }
@@ -509,7 +510,7 @@ function viewSettings(m){
     if(e.target.closest('[data-import]')){
       const bk=$('#bk',m), msg=$('#bkmsg',m);
       if(bk.classList.contains('hidden')){ bk.classList.remove('hidden'); bk.value=''; msg.textContent='Füge den Sicherungstext ein und tippe nochmal auf „Aus Text wiederherstellen“.'; return; }
-      try{ const o=JSON.parse(bk.value); if(!o||typeof o!=='object'||!o.cards) throw new Error('x'); state=Object.assign(defaults(),o); state.settings=Object.assign(defaults().settings,o.settings||{}); state.settings.modes=Object.assign(defaults().settings.modes,(o.settings||{}).modes||{}); migrateCards(state.cards); save(); applyTheme(); msg.textContent='Wiederhergestellt.'; setTimeout(renderView,600); }
+      try{ const o=JSON.parse(bk.value); if(!o||typeof o!=='object'||!o.cards) throw new Error('x'); state=stateFrom(o); migrateCards(state.cards); save(); applyTheme(); msg.textContent='Wiederhergestellt.'; setTimeout(renderView,600); }
       catch(_){ msg.textContent='Der Text ist keine gültige Sicherung.'; }
       return;
     }

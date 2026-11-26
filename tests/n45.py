@@ -8,7 +8,7 @@ shutil.copytree(ROOT,d,ignore=shutil.ignore_patterns('.git','tests','node_module
 srv=subprocess.Popen(['python3','-m','http.server','8766','-d',d],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(0.8)
 pw=sync_playwright().start(); b=pw.chromium.launch(executable_path='/usr/bin/google-chrome',args=['--no-sandbox'])
 try:
-    pg=b.new_context(viewport={'width':820,'height':900},service_workers='block').new_page(); errs=[]; pg.on('pageerror',lambda e:errs.append(str(e)))
+    pg=b.new_context(viewport={'width':820,'height':900},service_workers='block',bypass_csp=True).new_page(); errs=[]; pg.on('pageerror',lambda e:errs.append(str(e)))
     # Konfiguration mit dem Werkzeug der App erzeugen (nur Test-Passwort)
     pg.goto('http://localhost:8766/passwort-setzen.html'); pg.fill('#pw',TESTPW); pg.click('#go'); pg.wait_for_function("document.getElementById('out').value.length>20",timeout=20000)
     cfg=pg.input_value('#out'); open(os.path.join(d,'lock-config.js'),'w').write(cfg)

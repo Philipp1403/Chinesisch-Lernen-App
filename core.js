@@ -5,7 +5,9 @@ const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isHan = ch => /[㐀-鿿]/.test(ch);
 const DAY = 86400000;
-const APP_VERSION = 'v30'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
+/* Wird die Seite in einen fremden Rahmen geladen (Clickjacking), bleibt sie leer. GitHub Pages erlaubt keine X-Frame-Options-Kopfzeile. */
+if(window.top!==window.self){ try{ document.documentElement.style.display='none'; }catch(_){} }
+const APP_VERSION = 'v31'; /* bei jeder Änderung mit sw.js (const V) hochzählen */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function dayStart(plus=0){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+plus); return d.getTime(); }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -104,11 +106,46 @@ let storageOk=true;
 const defaults=()=>({v:2,
   settings:{level:1,rate:0.85,slowRate:0.5,voice:'',auto:true,showText:true,tones:false,pinyin:true,outline:true,showDe:true,freeDraw:false,showRef:true,perRound:8,theme:'auto',modes:{read:true,listen:true,write:true}},
   cards:{},stats:{},hard:{},hardOut:{},epoch:0,log:{},ui:{scope:[]}});
+/* ============ Fremden Zustand säubern ============
+   Sicherungstext, Gist-Stand und lokaler Speicher sind Eingaben von außen. Es werden nur bekannte Felder übernommen, Zahlen bleiben Zahlen,
+   Schlüssel wie "__proto__" oder ungeprüfte Texte kommen nicht in den Zustand (sonst könnte HTML auf der Seite landen). */
+const HARD_KINDS=['lesen','hören','schreiben','sprechen'];
+const _n=(v,d=0)=>{ v=Number(v); return Number.isFinite(v)?v:d; };
+const _o=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{};
+const _own=(x,k)=>Object.prototype.hasOwnProperty.call(x,k);
+const _id=/^\d{1,6}$/, _lid=/^[a-z0-9_-]{1,40}$/i;
+function sanitizeLearning(o){
+  o=_o(o); const out={epoch:_n(o.epoch),cards:{},stats:{},hard:{},hardOut:{},log:{},tests:{}};
+  const cs=_o(o.cards);
+  for(const id of Object.keys(cs)){ if(!_id.test(id)) continue; const x=_o(cs[id]), c={}; for(const k of ['e','i','r','l','d','m','ls','io','v','s']) if(_own(x,k)) c[k]=_n(x[k]); out.cards[id]=c; }
+  const ss=_o(o.stats); for(const id of Object.keys(ss)) if(_id.test(id)) out.stats[id]={ok:_n(_o(ss[id]).ok),bad:_n(_o(ss[id]).bad)};
+  const hs=_o(o.hard);
+  for(const id of Object.keys(hs)){ if(!_id.test(id)) continue; const x=_o(hs[id]), k={}, xk=_o(x.k); for(const t of HARD_KINDS) if(_own(xk,t)) k[t]=_n(xk[t]); out.hard[id]={s:_n(x.s),n:_n(x.n),t:_n(x.t),k}; }
+  const ho=_o(o.hardOut); for(const id of Object.keys(ho)) if(_id.test(id)) out.hardOut[id]=_n(ho[id]);
+  const lg=_o(o.log); for(const d of Object.keys(lg)) if(/^\d{4}-\d{2}-\d{2}$/.test(d)) out.log[d]=_n(lg[d]);
+  const ts=_o(o.tests); for(const l of Object.keys(ts)){ if(!_lid.test(l)) continue; const x=_o(ts[l]); out.tests[l]={last:x.last===null?null:_n(x.last),best:_n(x.best),ts:_n(x.ts)}; }
+  return out;
+}
+function stateFrom(o){
+  const st=defaults(); o=_o(o);
+  const S=_o(o.settings);
+  for(const k of Object.keys(st.settings)){ if(k==='modes') continue; if(_own(S,k)&&typeof S[k]===typeof st.settings[k]&&(typeof S[k]!=='number'||Number.isFinite(S[k]))) st.settings[k]=S[k]; }
+  if(typeof S.micVar==='string'&&_lid.test(S.micVar)) st.settings.micVar=S.micVar;
+  const M=_o(S.modes); for(const k of Object.keys(st.settings.modes)) if(_own(M,k)&&typeof M[k]==='boolean') st.settings.modes[k]=M[k];
+  const L=sanitizeLearning(Object.assign({},o,{tests:_o(o.ui).tests})); st.epoch=L.epoch; st.cards=L.cards; st.stats=L.stats; st.hard=L.hard; st.hardOut=L.hardOut; st.log=L.log;
+  const U=_o(o.ui); st.ui.tests=L.tests;
+  if(Array.isArray(U.scope)) st.ui.scope=U.scope.filter(x=>typeof x==='string'&&_lid.test(x));
+  if(_own(U,'fcCount')) st.ui.fcCount=_n(U.fcCount);
+  if(Array.isArray(U.towerSeen)) st.ui.towerSeen=U.towerSeen.filter(x=>typeof x==='number'&&Number.isFinite(x));
+  const W=_o(U.wset);
+  if(Object.keys(W).length) st.ui.wset={scope:Array.isArray(W.scope)?W.scope.filter(x=>typeof x==='string'&&_lid.test(x)):[],demo:W.demo!==false,reps:_n(W.reps,10),count:_n(W.count,5),help:['on','off','fade'].includes(W.help)?W.help:'fade',mode:W.mode==='free'?'free':'trace'};
+  return st;
+}
 let state=defaults();
 function load(){
   try{
     const s=localStorage.getItem(KEY);
-    if(s){ const o=JSON.parse(s); const d=defaults(); state=Object.assign(d,o); state.settings=Object.assign(d.settings,o.settings||{}); state.settings.modes=Object.assign(d.settings.modes,(o.settings||{}).modes||{}); state.ui=Object.assign(d.ui,o.ui||{}); }
+    if(s){ state=stateFrom(JSON.parse(s)); }
   }catch(e){ storageOk=false; }
   migrateCards(state.cards);   /* alte Karten einmalig auf die zwei Phasen umrechnen (idempotent) */
 }

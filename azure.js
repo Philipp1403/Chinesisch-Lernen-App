@@ -257,6 +257,7 @@ function azResult(SDK,r,s,silent,silentDetail){
   return {res,raw:json};
 }
 function azConfigNew(SDK){
+  if(!/^[a-z0-9]{3,30}$/.test(String(AZ.region).trim())) throw new Error('Ungültige Region');   /* die Region wird Teil des Servernamens */
   const cfg=SDK.SpeechConfig.fromSubscription(AZ.key,AZ.region.trim());
   cfg.speechRecognitionLanguage='zh-CN';
   try{ cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs,'1500'); cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,'6000'); }catch(_){}
